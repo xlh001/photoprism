@@ -217,8 +217,8 @@ type FaceClusterGates struct {
 // It takes the model, size and score rather than reading them from the loaded engine, because the
 // command that reports them never loads one and would otherwise count against the shipped defaults.
 func CountFaceClusterGates(model string, size, score int) (result FaceClusterGates) {
-	recent, sized, scored := "1 = 1", "1 = 1", ""
-	var recentArgs, sizeArgs []any
+	recent, scored := "1 = 1", ""
+	var recentArgs []any
 
 	newest := newestAutoFaceTime(model)
 
@@ -226,9 +226,9 @@ func CountFaceClusterGates(model string, size, score int) (result FaceClusterGat
 		recent, recentArgs = "created_at > ?", []any{newest}
 	}
 
-	if size > 0 {
-		sized, sizeArgs = entity.ClusterSizeCond("", size)
-	}
+	// Read whatever the bar is: below 1 it carries the detail gate alone, which is not a bar an
+	// operator sets and must count here too.
+	sized, sizeArgs := entity.ClusterSizeCond("", size)
 
 	scored, scoreArgs := clusterScoreCond(score)
 
@@ -297,9 +297,10 @@ func countNewFaceMarkers(current string, size, score int, recent bool) (n int) {
 	newest := newestAutoFaceTime(current)
 	q := unclusteredFaceMarkers(current)
 
-	if sizeCond, sizeArgs := entity.ClusterSizeCond("", size); sizeArgs != nil {
-		q = q.Where(sizeCond, sizeArgs...)
-	}
+	// Applied whatever the bar is, since the condition also carries the detail gate, which no
+	// size setting turns off.
+	sizeCond, sizeArgs := entity.ClusterSizeCond("", size)
+	q = q.Where(sizeCond, sizeArgs...)
 
 	q = whereClusterScore(q, score)
 
