@@ -203,7 +203,11 @@ type FaceClusterGates struct {
 	Recent      int
 	SizeOK      int
 	ScoreOK     int
-	Eligible    int
+	// DetailOK counts the markers clearing the crop-detail condition alone, which the size bar
+	// carries but no option relaxes - so a shortfall there sends an operator to a knob that
+	// cannot move it unless the report names it separately.
+	DetailOK int
+	Eligible int
 	// Clusterable counts the markers clearing both bars whatever their age, which is what a forced
 	// run would take. Eligible answers what the automatic pass sees; this answers what --force buys.
 	Clusterable int
@@ -235,19 +239,25 @@ func CountFaceClusterGates(model string, size, score int) (result FaceClusterGat
 	// One pass rather than one query per bar: LENGTH() on the embedding blob defeats every index,
 	// so each bar would otherwise cost a full scan of a table that grows with the library - in the
 	// command an operator runs when something is already wrong. SUM returns NULL over no rows.
+	// The detail condition carries no placeholder, so it can be counted on its own without
+	// disturbing the argument sequence below.
+	detailed := entity.EmbedDetailCond("")
+
 	sel := "COUNT(*) AS unclustered" +
 		", COALESCE(SUM(CASE WHEN " + recent + " THEN 1 ELSE 0 END), 0) AS recent" +
 		", COALESCE(SUM(CASE WHEN " + recent + " AND " + sized + " THEN 1 ELSE 0 END), 0) AS size_ok" +
 		", COALESCE(SUM(CASE WHEN " + recent + " AND " + scored + " THEN 1 ELSE 0 END), 0) AS score_ok" +
+		", COALESCE(SUM(CASE WHEN " + recent + " AND " + detailed + " THEN 1 ELSE 0 END), 0) AS detail_ok" +
 		", COALESCE(SUM(CASE WHEN " + recent + " AND " + sized + " AND " + scored + " THEN 1 ELSE 0 END), 0) AS eligible" +
 		", COALESCE(SUM(CASE WHEN " + sized + " AND " + scored + " THEN 1 ELSE 0 END), 0) AS clusterable"
 
-	args := make([]any, 0, 4*len(recentArgs)+2*len(sizeArgs)+2*len(scoreArgs))
+	args := make([]any, 0, 5*len(recentArgs)+2*len(sizeArgs)+2*len(scoreArgs))
 	args = append(args, recentArgs...)
 	args = append(args, recentArgs...)
 	args = append(args, sizeArgs...)
 	args = append(args, recentArgs...)
 	args = append(args, scoreArgs...)
+	args = append(args, recentArgs...)
 	args = append(args, recentArgs...)
 	args = append(args, sizeArgs...)
 	args = append(args, scoreArgs...)

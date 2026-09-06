@@ -82,7 +82,8 @@ func TestFaces_startClusterRetry(t *testing.T) {
 	w.conf.Options().FaceClusterCore = face.ClusterCoreDefault
 
 	// Four faces of one person: one short of the core the first pass needs, which is the whole
-	// population this option exists for.
+	// population this option exists for. The subtests share them on purpose and run in order: the
+	// disabled case is the control that shows the first pass cannot cluster them.
 	base := face.RandomEmbedding()
 	residue := retryTestMarkers(t, base, 4, 11)
 
@@ -98,6 +99,17 @@ func TestFaces_startClusterRetry(t *testing.T) {
 
 		assert.Zero(t, result.Retried, "no second pass runs")
 		assert.Empty(t, retryTestClusters(t, residue), "four faces do not reach a core of five")
+	})
+	t.Run("RefusesACoreBelowTwo", func(t *testing.T) {
+		// A cluster seeded from one embedding has no centroid and is never offered to the matcher,
+		// which is the same floor face-cluster-core has.
+		retried, err := w.ClusterRetry(1)
+		require.NoError(t, err)
+		assert.Empty(t, retried)
+
+		retried, err = w.ClusterRetry(0)
+		require.NoError(t, err)
+		assert.Empty(t, retried)
 	})
 	t.Run("FormsAClusterFromTheResidue", func(t *testing.T) {
 		w.conf.Options().FaceClusterCoreRetry = 4
@@ -117,6 +129,135 @@ func TestFaces_startClusterRetry(t *testing.T) {
 			assert.ElementsMatch(t, residue, members)
 		}
 	})
+}
+
+// TestFaces_startClusterRetryRunsUnforced pins that an ordinary worker run reaches the second pass.
+//
+// The trigger the first pass evaluates counts markers newer than the newest cluster, so the
+// clusters the first pass has just created close it. Re-asking it for the retry would skip the
+// second pass in exactly the runs where the first one did work - and every scheduled run is
+// unforced, so that is the path this option exists on.
+func TestFaces_startClusterRetryRunsUnforced(t *testing.T) {
+	w := isolatedTestFaces(t, "facesclusterretryunforced")
+
+	restore := face.ClusterCore
+	t.Cleanup(func() { face.ClusterCore = restore })
+	face.ClusterCore = face.ClusterCoreDefault
+
+	w.conf.Options().FaceClusterCore = face.ClusterCoreDefault
+	w.conf.Options().FaceClusterCoreRetry = 4
+	require.Equal(t, 4, w.conf.FaceClusterCoreRetry())
+
+	// Five faces of one person, which the first pass clusters, and four of another, which only the
+	// second can. The first pass forming something is what closes the trigger.
+	first := retryTestMarkers(t, face.RandomEmbedding(), 5, 31)
+	residue := retryTestMarkers(t, face.RandomEmbedding(), 4, 32)
+
+	result, err := w.start(FacesOptions{Threshold: 1})
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, result.Added, "the first pass clusters the five")
+	assert.Equal(t, 1, result.Retried, "and the second pass still runs for the four")
+
+	formed := retryTestClusters(t, residue)
+	require.Len(t, formed, 1)
+
+	for id, members := range formed {
+		assert.ElementsMatch(t, residue, members)
+		assert.NotContains(t, retryTestClusters(t, first), id, "the two passes form different clusters")
+	}
+}
+
+// TestFaces_MatchNewClusters covers the pass that makes a retry cluster real. Without it the
+// cluster holds nothing and DeleteOrphanFaces removes it in the same run.
+func TestFaces_MatchNewClusters(t *testing.T) {
+	w := isolatedTestFaces(t, "facesmatchnewclusters")
+
+	t.Run("NoClusters", func(t *testing.T) {
+		result, err := w.MatchNewClusters(nil)
+		require.NoError(t, err)
+		assert.Zero(t, result.Updated)
+	})
+	t.Run("AttachesTheResidue", func(t *testing.T) {
+		base := face.RandomEmbedding()
+		markers := retryTestMarkers(t, base, 4, 41)
+
+		src := rand.New(rand.NewPCG(42, 43)) //nolint:gosec // deterministic fixtures, not security
+		f := entity.NewFace("", entity.SrcAuto, face.Embeddings{
+			benchmarkEmbeddingAt(base, 0.02, src),
+			benchmarkEmbeddingAt(base, 0.03, src),
+		}, face.EmbeddingModelName())
+		require.NotNil(t, f)
+		require.NoError(t, f.Create())
+
+		result, err := w.MatchNewClusters(entity.Faces{*f})
+		require.NoError(t, err)
+		assert.Positive(t, result.Updated)
+
+		formed := retryTestClusters(t, markers)
+		require.Len(t, formed, 1)
+		assert.ElementsMatch(t, markers, formed[f.ID])
+	})
+	t.Run("LeavesAMarkerWithItsCloserCluster", func(t *testing.T) {
+		// The force scan reads every marker, including ones an earlier pass already attached, so
+		// this is what stops a retry cluster from taking a face that is closer to another.
+		base := face.RandomEmbedding()
+		markers := retryTestMarkers(t, base, 4, 44)
+
+		src := rand.New(rand.NewPCG(45, 46)) //nolint:gosec // deterministic fixtures, not security
+		near := entity.NewFace("", entity.SrcAuto, face.Embeddings{
+			benchmarkEmbeddingAt(base, 0.01, src),
+			benchmarkEmbeddingAt(base, 0.02, src),
+		}, face.EmbeddingModelName())
+		require.NotNil(t, near)
+		require.NoError(t, near.Create())
+
+		_, err := w.MatchNewClusters(entity.Faces{*near})
+		require.NoError(t, err)
+		require.Len(t, retryTestClusters(t, markers), 1)
+
+		// A second cluster of the same person, offered afterwards: every marker already holds a
+		// distance, and none of them may move to it.
+		far := entity.NewFace("", entity.SrcAuto, face.Embeddings{
+			benchmarkEmbeddingAt(base, 0.2, src),
+			benchmarkEmbeddingAt(base, 0.21, src),
+		}, face.EmbeddingModelName())
+		require.NotNil(t, far)
+		require.NoError(t, far.Create())
+
+		_, err = w.MatchNewClusters(entity.Faces{*far})
+		require.NoError(t, err)
+
+		formed := retryTestClusters(t, markers)
+		require.Len(t, formed, 1)
+		assert.ElementsMatch(t, markers, formed[near.ID], "the closer cluster keeps every marker")
+	})
+}
+
+// TestFaces_startClusterRetrySkippedWithoutAPass pins that the retry does not run where the first
+// pass did not: the trigger exists so an idle worker does not scan and cluster on every wake, and
+// a retry that ignored it would do both.
+func TestFaces_startClusterRetrySkippedWithoutAPass(t *testing.T) {
+	w := isolatedTestFaces(t, "facesclusterretryskipped")
+
+	restore := face.ClusterCore
+	t.Cleanup(func() { face.ClusterCore = restore })
+	face.ClusterCore = face.ClusterCoreDefault
+
+	w.conf.Options().FaceClusterCore = face.ClusterCoreDefault
+	w.conf.Options().FaceClusterCoreRetry = 4
+	require.Equal(t, 4, w.conf.FaceClusterCoreRetry())
+
+	residue := retryTestMarkers(t, face.RandomEmbedding(), 4, 51)
+
+	// A threshold no library reaches, which is the shape of an idle instance: the first pass
+	// refuses to run, so there is nothing for a second one to work on either.
+	result, err := w.start(FacesOptions{Threshold: 1000000})
+	require.NoError(t, err)
+
+	assert.Zero(t, result.Added)
+	assert.Zero(t, result.Retried, "the retry inherits the decision not to run")
+	assert.Empty(t, retryTestClusters(t, residue))
 }
 
 // TestFaces_startClusterRetryFollowsMatching pins the ordering rather than the outcome: the retry

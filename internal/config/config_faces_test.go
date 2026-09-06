@@ -2256,6 +2256,7 @@ func TestConfig_FaceClusterCoreRetry(t *testing.T) {
 	t.Run("UnsetDerivesAFlatFour", func(t *testing.T) {
 		// ⚠ Flat, not face-cluster-core - 1. Only 5 to 4 was measured, so a higher first pass
 		// still retries at 4 rather than at one less than itself.
+		c.options.FaceClusterCoreRetry = 0
 		c.options.FaceClusterCore = face.ClusterCoreDefault
 		assert.Equal(t, face.ClusterCoreRetryDefault, c.FaceClusterCoreRetry())
 
@@ -2268,6 +2269,7 @@ func TestConfig_FaceClusterCoreRetry(t *testing.T) {
 	t.Run("OffBelowTheMeasuredCore", func(t *testing.T) {
 		// A first pass already at or below the retry core has nothing to hand it, so the default
 		// is no second pass rather than a core of 3.
+		c.options.FaceClusterCoreRetry = 0
 		c.options.FaceClusterCore = 4
 		assert.Equal(t, -1, c.FaceClusterCoreRetry())
 

@@ -752,8 +752,21 @@ func faceClusterStatusFor(gates query.FaceClusterGates, required, size int, scor
 	// eligible count is named as the intersection: the size and score counts overlap, so reporting
 	// them alone reads as two independent facts rather than as the arithmetic that produced it.
 	return fmt.Sprintf("Automatic clustering needs %d new markers (2 x face-cluster-core %d) and has %d clearing both: "+
-		"of the %d added since the last cluster, %d clear the face-cluster-size of %d px and %d clear %s.",
-		required, core, gates.Eligible, gates.Recent, gates.SizeOK, size, gates.ScoreOK, scorePhrase)
+		"of the %d added since the last cluster, %d clear the face-cluster-size of %d px and %d clear %s.%s",
+		required, core, gates.Eligible, gates.Recent, gates.SizeOK, size, gates.ScoreOK, scorePhrase,
+		faceDetailShortfall(gates))
+}
+
+// faceDetailShortfall names the markers the crop-detail condition excludes, or "" when it excludes
+// none. The size count carries that condition, so a shortfall it caused otherwise reads as one
+// face-cluster-size explains - and lowering that bar cannot admit a single one of them.
+func faceDetailShortfall(gates query.FaceClusterGates) string {
+	if excluded := gates.Recent - gates.DetailOK; excluded > 0 {
+		return fmt.Sprintf(" %d of them were embedded from a crop their source could not fill, "+
+			"which no threshold admits and re-indexing at a larger thumb-size-face is what changes.", excluded)
+	}
+
+	return ""
 }
 
 // faceClusterScoreFloor maps FACE_CLUSTER_SCORE onto the convention the marker queries use, where

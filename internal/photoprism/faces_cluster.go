@@ -260,7 +260,9 @@ func splitCluster(part faceClusterPart, workers int) ([]faceClusterPart, error) 
 
 // Cluster clusters indexed face embeddings at the configured core size.
 func (w *Faces) Cluster(opt FacesOptions) (added entity.Faces, err error) {
-	return w.cluster(opt, face.ClusterCore, false)
+	added, _, err = w.cluster(opt, face.ClusterCore, false)
+
+	return added, err
 }
 
 // ClusterRetry repeats clustering at a lower core over the markers matching left unclustered.
@@ -269,21 +271,29 @@ func (w *Faces) Cluster(opt FacesOptions) (added entity.Faces, err error) {
 // face_id, so a pass that runs after matching sees exactly the residue. Which is also why it must
 // run after one - before it, the lower core would claim markers matching would have attached to an
 // existing cluster.
-func (w *Faces) ClusterRetry(opt FacesOptions, core int) (added entity.Faces, err error) {
+//
+// ⚠ The trigger is deliberately not evaluated again. It counts markers newer than the newest
+// cluster, and the pass before this one has just created some, so re-asking it would skip the
+// retry in exactly the runs where the first pass did work. Whether a pass runs at all is the
+// caller's decision; this one only needs enough of a residue to form a cluster at its own core.
+func (w *Faces) ClusterRetry(core int) (added entity.Faces, err error) {
 	if core < 2 {
 		return added, nil
 	}
 
-	return w.cluster(opt, core, true)
+	added, _, err = w.cluster(FacesOptions{Force: true, Threshold: core}, core, true)
+
+	return added, err
 }
 
-// cluster groups unclustered face embeddings into new clusters at the specified core size.
+// cluster groups unclustered face embeddings into new clusters at the specified core size, and
+// reports whether it got past the trigger that decides whether a pass runs at all.
 //
 // A retry pass stays quiet about finding nothing: the pass before it counted the same markers and
 // has already reported whatever kept them from clustering.
-func (w *Faces) cluster(opt FacesOptions, core int, retry bool) (added entity.Faces, err error) {
+func (w *Faces) cluster(opt FacesOptions, core int, retry bool) (added entity.Faces, ran bool, err error) {
 	if w.Disabled() {
-		return added, fmt.Errorf("face recognition is disabled")
+		return added, false, fmt.Errorf("face recognition is disabled")
 	}
 
 	reportSplitOverrides()
@@ -291,7 +301,7 @@ func (w *Faces) cluster(opt FacesOptions, core int, retry bool) (added entity.Fa
 	// A model that failed to load leaves no name to filter by, so the marker query would
 	// return vectors from every embedding space in the library in one result set.
 	if modelErr := face.EmbedderError(); modelErr != nil {
-		return added, fmt.Errorf("cannot cluster because the embedding model failed to load: %w", modelErr)
+		return added, false, fmt.Errorf("cannot cluster because the embedding model failed to load: %w", modelErr)
 	}
 
 	// Skip clustering if index contains no new face markers, and force option isn't set.
@@ -300,11 +310,9 @@ func (w *Faces) cluster(opt FacesOptions, core int, retry bool) (added entity.Fa
 			log.Infof("faces: enforced clustering")
 		}
 	} else if n := query.CountNewFaceMarkers(face.ClusterSizeThreshold, face.ClusterScoreAuto); n < opt.SampleThreshold() {
-		if !retry {
-			w.reportClusteringSkipped(n, opt.SampleThreshold())
-		}
+		w.reportClusteringSkipped(n, opt.SampleThreshold())
 
-		return added, nil
+		return added, false, nil
 	}
 
 	// Read the configured model once, so the vectors the clusterer consumes and the name
@@ -318,12 +326,12 @@ func (w *Faces) cluster(opt FacesOptions, core int, retry bool) (added entity.Fa
 
 	// Anything that keeps us from doing this?
 	if err != nil {
-		return added, err
+		return added, false, err
 	} else if samples := len(embeddings); samples < opt.SampleThreshold() {
 		log.Debugf("faces: at least %d samples needed for clustering", opt.SampleThreshold())
-		return added, nil
+		return added, true, nil
 	} else if embeddings.Dims() < 1 {
-		return added, fmt.Errorf("cannot cluster %d samples of different lengths, run photoprism faces migrate", samples)
+		return added, true, fmt.Errorf("cannot cluster %d samples of different lengths, run photoprism faces migrate", samples)
 	} else {
 		var c alg.HardClusterer
 
@@ -331,9 +339,9 @@ func (w *Faces) cluster(opt FacesOptions, core int, retry bool) (added entity.Fa
 		if c, err = alg.DBSCANWithProgress(core, face.ClusterDist, w.conf.IndexWorkers(), alg.EuclideanDist, 15*time.Minute, func(done, total int) {
 			log.Infof("cluster: processing %d of %d", done, total)
 		}); err != nil {
-			return added, err
+			return added, true, err
 		} else if err = c.Learn(embeddings.Float64()); err != nil {
-			return added, err
+			return added, true, err
 		}
 
 		sizes := c.Sizes()
@@ -387,5 +395,5 @@ func (w *Faces) cluster(opt FacesOptions, core int, retry bool) (added entity.Fa
 		}
 	}
 
-	return added, nil
+	return added, true, nil
 }
