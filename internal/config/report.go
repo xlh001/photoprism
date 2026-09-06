@@ -415,6 +415,7 @@ func (c *Config) faceConfigRows() []faceConfigRow {
 		{faceSectionRecognition, "face-cluster-size", fmt.Sprintf("%d", c.FaceClusterSize())},
 		{faceSectionRecognition, "face-cluster-score", fmt.Sprintf("%d", c.FaceClusterScoreEffective())},
 		{faceSectionRecognition, "face-cluster-core", fmt.Sprintf("%d", c.FaceClusterCore())},
+		{faceSectionRecognition, "face-cluster-core-retry", fmt.Sprintf("%d", c.FaceClusterCoreRetry())},
 		{faceSectionRecognition, "face-cluster-split-rounds", fmt.Sprintf("%d", c.FaceClusterSplitRounds())},
 		{faceSectionRecognition, "face-cluster-split-shrink", fmt.Sprintf("%g", c.FaceClusterSplitShrink())},
 		{faceSectionRecognition, "face-cluster-dist", c.faceDistReport(c.FaceClusterDist)},
@@ -681,7 +682,8 @@ func (c *Config) faceClusterStatus() string {
 	// The same getter Propagate assigns to face.SampleThreshold, not the global: this command runs
 	// on InitCore, which never propagates, so the global would still hold the shipped default and
 	// the report would name a shortfall that is not the one holding.
-	return faceClusterStatusFor(gates, c.FaceSampleThreshold(), size, c.faceClusterScorePhrase(floor), c.FaceClusterCore(), c.FaceClusterDist())
+	return faceClusterStatusFor(gates, c.FaceSampleThreshold(), size, c.faceClusterScorePhrase(floor),
+		c.FaceClusterCore(), c.FaceClusterCoreRetry(), c.FaceClusterDist())
 }
 
 // faceClusterScorePhrase names the score bar the gate counts were taken at. Unset it is per marker,
@@ -702,13 +704,21 @@ func (c *Config) faceClusterScorePhrase(floor int) string {
 // faceClusterStatusFor renders the clustering status for a set of gate counts, or "" when nothing
 // is holding. Separate from the queries so every branch is reachable without a library shaped to
 // produce it.
-func faceClusterStatusFor(gates query.FaceClusterGates, required, size int, scorePhrase string, core int, dist float64) string {
+func faceClusterStatusFor(gates query.FaceClusterGates, required, size int, scorePhrase string, core, retry int, dist float64) string {
 	// Enough to run and nothing formed: no cluster advances the recency cut, so the pass repeats on
-	// every wake. No threshold explains it, so name what decides whether a group forms.
+	// every wake. No threshold explains it, so name what decides whether a group forms - including
+	// the second pass, or an operator lowers a core the run is already retrying below.
 	if gates.Eligible >= required && !gates.Clustered && gates.Unclustered > 0 {
+		cores := fmt.Sprintf("face-cluster-core %d requires", core)
+
+		if retry > 0 {
+			cores = fmt.Sprintf("face-cluster-core %d, and face-cluster-core-retry %d over what matching leaves, require",
+				core, retry)
+		}
+
 		return fmt.Sprintf("Automatic clustering has %d eligible markers and has formed no clusters: "+
-			"face-cluster-core %d requires that many faces of one person within a face-cluster-dist of %g, "+
-			"counting the face itself.", gates.Eligible, core, dist)
+			"%s that many faces of one person within a face-cluster-dist of %g, "+
+			"counting the face itself.", gates.Eligible, cores, dist)
 	}
 
 	// Enough to run: not a state an operator has to act on, and a line every healthy instance
