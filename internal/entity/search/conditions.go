@@ -33,6 +33,18 @@ func SqlParam(s, pre, post string) string {
 	return pre + strings.Trim(clean.SqlClean(s), " |&*%") + post
 }
 
+// ClipSearchTerms bounds a search value to the length limit that clean.SearchString applies to
+// values parsed from a query expression, so a value bound straight from a request carries the
+// same bound. Each term expands into its own predicate and bind parameter, so the statement is
+// sized by this input.
+func ClipSearchTerms(s string) string {
+	if len(s) <= clean.LengthLimit {
+		return s
+	}
+
+	return s[:clean.LengthLimit]
+}
+
 // LikeAny builds OR-chained LIKE predicates for a text column. The input string
 // may contain AND / OR separators; keywords trigger stemming and plural
 // normalization while exact mode disables wildcard suffixes.
@@ -42,6 +54,8 @@ func LikeAny(col, s string, keywords, exact bool) (wheres []string, values [][]a
 	if s == "" {
 		return wheres, values
 	}
+
+	s = ClipSearchTerms(s)
 
 	s = txt.StripOr(clean.SearchQuery(s))
 
@@ -121,6 +135,8 @@ func LikeAll(col, s string, keywords, exact bool) (wheres []string, values [][]a
 		return wheres, values
 	}
 
+	s = ClipSearchTerms(s)
+
 	var words []string
 	var wildcardThreshold int
 
@@ -169,16 +185,24 @@ func LikeAllNames(cols Cols, s string) (wheres []string, values [][]any) {
 		return wheres, values
 	}
 
+	s = ClipSearchTerms(s)
+
 	for _, k := range txt.UnTrimmedSplitWithEscape(s, txt.AndRune, txt.EscapeRune) {
 		var orWheres []string
 		var orValues []any
+
+		seen := make(map[string]struct{})
 
 		for _, w := range txt.UnTrimmedSplitWithEscape(k, txt.OrRune, txt.EscapeRune) {
 			w = strings.TrimSpace(w)
 
 			if w == txt.EmptyString {
 				continue
+			} else if _, dup := seen[w]; dup {
+				continue
 			}
+
+			seen[w] = struct{}{}
 
 			for _, c := range cols {
 				if strings.Contains(w, txt.Space) {
@@ -207,6 +231,8 @@ func AnySlug(col, search, sep string) (where string, values []any) {
 	if search == "" {
 		return "", values
 	}
+
+	search = ClipSearchTerms(search)
 
 	if sep == "" {
 		sep = " "
@@ -288,6 +314,7 @@ func OrLike(col, s string) (where string, values []any) {
 		return "", []any{}
 	}
 
+	s = ClipSearchTerms(s)
 	s = strings.ReplaceAll(s, "*", "%")
 	s = strings.ReplaceAll(s, "%%", "%")
 
@@ -318,6 +345,7 @@ func OrLikeCols(cols []string, s string) (where string, values []any) {
 		return "", []any{}
 	}
 
+	s = ClipSearchTerms(s)
 	s = strings.ReplaceAll(s, "*", "%")
 	s = strings.ReplaceAll(s, "%%", "%")
 

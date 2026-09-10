@@ -1,6 +1,8 @@
 package search
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -469,5 +471,91 @@ func TestSplitAnd(t *testing.T) {
 		values := SplitAnd(" foo & Bar&BAZ ")
 
 		assert.Equal(t, []string{"foo", "Bar", "BAZ"}, values)
+	})
+}
+
+func TestClipSearchTerms(t *testing.T) {
+	t.Run("WithinLimit", func(t *testing.T) {
+		s := strings.Repeat("a", clean.LengthLimit)
+		assert.Equal(t, s, ClipSearchTerms(s))
+	})
+	t.Run("AboveLimit", func(t *testing.T) {
+		s := ClipSearchTerms(strings.Repeat("a", clean.LengthLimit*4))
+		assert.Len(t, s, clean.LengthLimit)
+	})
+	t.Run("Empty", func(t *testing.T) {
+		assert.Equal(t, "", ClipSearchTerms(""))
+	})
+}
+
+// TestConditionsBoundExpansion covers that a long search value cannot size the statement:
+// every term expands into its own predicate and bind parameter, so input past the limit
+// produces exactly what the clipped input does.
+func TestConditionsBoundExpansion(t *testing.T) {
+	// Distinct terms, so deduplication alone would not bound the result.
+	terms := func(n int) string {
+		out := make([]string, n)
+		for i := range out {
+			out[i] = fmt.Sprintf("q%d", i)
+		}
+		return strings.Join(out, "|")
+	}
+
+	long := terms(50000)
+	clipped := ClipSearchTerms(long)
+
+	assert.Greater(t, len(long), clean.LengthLimit*10)
+	assert.Len(t, clipped, clean.LengthLimit)
+
+	joined := func(wheres []string) string { return strings.Join(wheres, " AND ") }
+
+	t.Run("LikeAllNames", func(t *testing.T) {
+		a, av := LikeAllNames(Cols{"subj_name", "subj_alias"}, long)
+		b, bv := LikeAllNames(Cols{"subj_name", "subj_alias"}, clipped)
+		assert.Equal(t, joined(b), joined(a))
+		assert.Equal(t, bv, av)
+	})
+	t.Run("LikeAllNamesDeduplicates", func(t *testing.T) {
+		// Repeats collapse, as they do in the sibling builders.
+		wheres, values := LikeAllNames(Cols{"subj_name"}, "jane|jane|jane")
+		if assert.Len(t, wheres, 1) {
+			assert.Equal(t, "subj_name LIKE ?", wheres[0])
+			assert.Len(t, values[0], 1)
+		}
+	})
+	t.Run("LikeAllNamesKeepsDistinctTerms", func(t *testing.T) {
+		wheres, values := LikeAllNames(Cols{"subj_name"}, "jane|john")
+		if assert.Len(t, wheres, 1) {
+			assert.Equal(t, "subj_name LIKE ? OR subj_name LIKE ?", wheres[0])
+			assert.Equal(t, []any{"%jane%", "%john%"}, values[0])
+		}
+	})
+	t.Run("LikeAnyKeyword", func(t *testing.T) {
+		a, _ := LikeAnyKeyword("photos.photo_title", long)
+		b, _ := LikeAnyKeyword("photos.photo_title", clipped)
+		assert.Equal(t, joined(b), joined(a))
+	})
+	t.Run("LikeAllKeywords", func(t *testing.T) {
+		a, _ := LikeAllKeywords("photos.photo_title", long)
+		b, _ := LikeAllKeywords("photos.photo_title", clipped)
+		assert.Equal(t, joined(b), joined(a))
+	})
+	t.Run("AnySlug", func(t *testing.T) {
+		a, av := AnySlug("labels.label_slug", long, "|")
+		b, bv := AnySlug("labels.label_slug", clipped, "|")
+		assert.Equal(t, b, a)
+		assert.Equal(t, bv, av)
+	})
+	t.Run("OrLike", func(t *testing.T) {
+		a, av := OrLike("photos.photo_title", long)
+		b, bv := OrLike("photos.photo_title", clipped)
+		assert.Equal(t, b, a)
+		assert.Equal(t, bv, av)
+	})
+	t.Run("OrLikeCols", func(t *testing.T) {
+		a, av := OrLikeCols([]string{"a", "b"}, long)
+		b, bv := OrLikeCols([]string{"a", "b"}, clipped)
+		assert.Equal(t, b, a)
+		assert.Equal(t, bv, av)
 	})
 }
