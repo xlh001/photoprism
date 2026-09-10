@@ -11,7 +11,6 @@ import (
 	"github.com/photoprism/photoprism/internal/event"
 	"github.com/photoprism/photoprism/internal/form"
 	"github.com/photoprism/photoprism/internal/photoprism/get"
-	"github.com/photoprism/photoprism/internal/server/limiter"
 	"github.com/photoprism/photoprism/pkg/authn"
 	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/http/header"
@@ -51,13 +50,6 @@ func OAuthRevoke(router *gin.RouterGroup) {
 		if get.Config().Public() {
 			event.AuditErr([]string{clientIp, "oauth2", actor, action, authn.ErrDisabledInPublicMode.Error()})
 			Abort(c, http.StatusForbidden, i18n.ErrForbidden)
-			return
-		}
-
-		// Abort if the client has exhausted its authentication failure budget, as a
-		// revocation resolves a session from a token the request supplies.
-		if limiter.Auth.Reject(clientIp) {
-			limiter.AbortJSON(c)
 			return
 		}
 

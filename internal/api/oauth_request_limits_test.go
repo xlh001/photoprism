@@ -86,9 +86,49 @@ func TestOAuthRequestLimits(t *testing.T) {
 	})
 }
 
-// TestOAuthToken_RateLimitChargesMalformedRequests covers that a request which never reaches
-// a grant is still charged, so repeating it cannot stay free.
-func TestOAuthToken_RateLimitChargesMalformedRequests(t *testing.T) {
+// TestOAuthToken_ChargesPreCredentialRejections covers that a request rejected before it
+// presents credentials still consumes the authentication budget, so repeating it cannot stay
+// free, and that it draws on that budget rather than the one interactive sign-in shares.
+func TestOAuthToken_ChargesPreCredentialRejections(t *testing.T) {
+	cases := []struct {
+		name        string
+		contentType string
+		body        string
+		status      int
+	}{
+		{"UnusableGrant", header.ContentTypeJson, `{"padding":"nothing that matches a form field"}`, http.StatusUnauthorized},
+		{"UnsupportedGrant", header.ContentTypeForm, "grant_type=authorization_code", http.StatusBadRequest},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app, router, conf := NewApiTest()
+			conf.SetAuthMode(config.AuthModePasswd)
+			defer conf.SetAuthMode(config.AuthModePublic)
+			OAuthToken(router)
+
+			oldLogin, oldAuth := limiter.Login, limiter.Auth
+			defer func() { limiter.Login, limiter.Auth = oldLogin, oldAuth }()
+			limiter.Login = limiter.NewLimit(rate.Every(24*time.Hour), 3)
+			limiter.Auth = limiter.NewLimit(rate.Every(24*time.Hour), 3)
+
+			for i := range 3 {
+				code, _ := postCounted(app, "/api/v1/oauth/token", tc.contentType, strings.NewReader(tc.body))
+				assert.Equal(t, tc.status, code, "request %d", i+1)
+			}
+
+			code, _ := postCounted(app, "/api/v1/oauth/token", tc.contentType, strings.NewReader(tc.body))
+			assert.Equal(t, http.StatusTooManyRequests, code)
+
+			// The login budget is shared with interactive sign-in and stays untouched.
+			assert.False(t, limiter.Login.Reject("192.0.2.1"))
+		})
+	}
+}
+
+// TestOAuthToken_RefundsOnSuccess covers that a successful request returns the failure budget
+// it reserved, so a client authenticating repeatedly is not throttled.
+func TestOAuthToken_RefundsOnSuccess(t *testing.T) {
 	app, router, conf := NewApiTest()
 	conf.SetAuthMode(config.AuthModePasswd)
 	defer conf.SetAuthMode(config.AuthModePublic)
@@ -96,18 +136,14 @@ func TestOAuthToken_RateLimitChargesMalformedRequests(t *testing.T) {
 
 	oldLogin, oldAuth := limiter.Login, limiter.Auth
 	defer func() { limiter.Login, limiter.Auth = oldLogin, oldAuth }()
-	limiter.Login = limiter.NewLimit(rate.Every(24*time.Hour), 3)
-	limiter.Auth = limiter.NewLimit(rate.Every(24*time.Hour), 3)
+	limiter.Login = limiter.NewLimit(rate.Every(24*time.Hour), 2)
+	limiter.Auth = limiter.NewLimit(rate.Every(24*time.Hour), 60)
 
-	// A body that binds but carries no usable grant is rejected before any credential
-	// lookup, and must still consume the failure budget.
-	body := `{"padding":"nothing that matches a form field"}`
+	data := "grant_type=" + authn.GrantClientCredentials.String() + "&client_id=cs5cpu17n6gj2qo5&client_secret=xcCbOrw6I0vcoXzhnOmXhjpVSyFq0l0e&scope=metrics"
 
-	for i := range 3 {
-		code, _ := postCounted(app, "/api/v1/oauth/token", header.ContentTypeJson, strings.NewReader(body))
-		assert.Equal(t, http.StatusUnauthorized, code, "request %d", i+1)
+	// More successful requests than the burst allows: without the refund the third fails.
+	for i := range 4 {
+		code, _ := postCounted(app, "/api/v1/oauth/token", header.ContentTypeForm, strings.NewReader(data))
+		assert.Equal(t, http.StatusOK, code, "request %d", i+1)
 	}
-
-	code, _ := postCounted(app, "/api/v1/oauth/token", header.ContentTypeJson, strings.NewReader(body))
-	assert.Equal(t, http.StatusTooManyRequests, code)
 }
