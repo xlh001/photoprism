@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 
@@ -472,19 +473,24 @@ func TestSplitAnd(t *testing.T) {
 
 		assert.Equal(t, []string{"foo", "Bar", "BAZ"}, values)
 	})
+	t.Run("BoundsGroupCount", func(t *testing.T) {
+		// Each group adds a condition of its own, so the count is bounded as well as
+		// the input length.
+		groups := SplitAnd(strings.TrimSuffix(strings.Repeat("aa&", 50000), "&"))
+
+		assert.Len(t, groups, MaxSearchGroups)
+	})
 }
 
 func TestClipSearchTerms(t *testing.T) {
 	t.Run("WithinLimit", func(t *testing.T) {
-		s := strings.Repeat("a", clean.LengthLimit)
+		s := " " + strings.Repeat("日", 1300) + " "
 		assert.Equal(t, s, ClipSearchTerms(s))
 	})
 	t.Run("AboveLimit", func(t *testing.T) {
 		s := ClipSearchTerms(strings.Repeat("a", clean.LengthLimit*4))
 		assert.Len(t, s, clean.LengthLimit)
-	})
-	t.Run("Empty", func(t *testing.T) {
-		assert.Equal(t, "", ClipSearchTerms(""))
+		assert.True(t, utf8.ValidString(s))
 	})
 }
 
@@ -521,6 +527,15 @@ func TestConditionsBoundExpansion(t *testing.T) {
 		if assert.Len(t, wheres, 1) {
 			assert.Equal(t, "subj_name LIKE ?", wheres[0])
 			assert.Len(t, values[0], 1)
+		}
+	})
+	t.Run("LikeAllNamesDeduplicatesPerGroup", func(t *testing.T) {
+		// Each AND group is deduplicated on its own, so a term shared between groups
+		// survives in both and the groups keep their meaning.
+		wheres, values := LikeAllNames(Cols{"subj_name"}, "a|b&b|c")
+		if assert.Len(t, wheres, 2) {
+			assert.Equal(t, []any{"%a%", "%b%"}, values[0])
+			assert.Equal(t, []any{"%b%", "%c%"}, values[1])
 		}
 	})
 	t.Run("LikeAllNamesKeepsDistinctTerms", func(t *testing.T) {

@@ -2,6 +2,7 @@ package clean
 
 import (
 	"strings"
+	"unicode/utf8"
 )
 
 // spaced returns the string padded with a space left and right.
@@ -82,6 +83,30 @@ func SearchString(s string) string {
 
 	// Trim — keep '\' so downstream filters can honor escape sequences.
 	return strings.Trim(s, "|<>\n\r\t")
+}
+
+// SearchTerms bounds a search value to LengthLimit, the limit SearchString applies to values
+// parsed from a query expression, so a value bound straight from a request carries the same
+// bound. Each term expands into its own condition, so this input sizes the statement.
+// A value within the limit is returned unchanged.
+func SearchTerms(s string) string {
+	if len(s) <= LengthLimit {
+		return s
+	}
+
+	s = s[:LengthLimit]
+
+	// Drop a trailing partial rune, as a term must stay valid UTF-8 to bind.
+	for len(s) > 0 {
+		if r, size := utf8.DecodeLastRuneInString(s); r == utf8.RuneError && size <= 1 {
+			s = s[:len(s)-1]
+			continue
+		}
+
+		break
+	}
+
+	return s
 }
 
 // SearchQuery replaces search operator with default symbols.

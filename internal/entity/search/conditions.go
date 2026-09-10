@@ -33,16 +33,9 @@ func SqlParam(s, pre, post string) string {
 	return pre + strings.Trim(clean.SqlClean(s), " |&*%") + post
 }
 
-// ClipSearchTerms bounds a search value to the length limit that clean.SearchString applies to
-// values parsed from a query expression, so a value bound straight from a request carries the
-// same bound. Each term expands into its own predicate and bind parameter, so the statement is
-// sized by this input.
+// ClipSearchTerms bounds a search value so one request cannot size the statement.
 func ClipSearchTerms(s string) string {
-	if len(s) <= clean.LengthLimit {
-		return s
-	}
-
-	return s[:clean.LengthLimit]
+	return clean.SearchTerms(s)
 }
 
 // LikeAny builds OR-chained LIKE predicates for a text column. The input string
@@ -273,6 +266,8 @@ func AnySlug(col, search, sep string) (where string, values []any) {
 // an OR-chained equality predicate for the values that remain. Named low/high
 // to avoid shadowing the predeclared min/max identifiers added in Go 1.21.
 func AnyInt(col, numbers, sep string, low, high int) (where string, values []any) {
+	numbers = ClipSearchTerms(numbers)
+
 	if numbers == "" {
 		return "", values
 	}
@@ -284,13 +279,18 @@ func AnyInt(col, numbers, sep string, low, high int) (where string, values []any
 	var matches []int
 	var wheres []string
 
+	seen := make(map[int]struct{})
+
 	for n := range strings.SplitSeq(numbers, sep) {
 		i := txt.Int(n)
 
 		if i == 0 || i < low || i > high {
 			continue
+		} else if _, dup := seen[i]; dup {
+			continue
 		}
 
+		seen[i] = struct{}{}
 		matches = append(matches, i)
 	}
 
@@ -383,8 +383,19 @@ func SplitOr(s string) (values []string) {
 	return txt.TrimmedSplitWithEscape(s, txt.OrRune, txt.EscapeRune)
 }
 
+// MaxSearchGroups bounds the number of AND-separated groups a search value may produce.
+// Each group adds a separate condition to the statement, and the query builder copies its
+// condition list on every addition, so this count sets the cost.
+const MaxSearchGroups = 32
+
 // SplitAnd splits a search string on AND separators (&) while honoring escape
 // sequences.
 func SplitAnd(s string) (values []string) {
-	return txt.TrimmedSplitWithEscape(s, txt.AndRune, txt.EscapeRune)
+	values = txt.TrimmedSplitWithEscape(ClipSearchTerms(s), txt.AndRune, txt.EscapeRune)
+
+	if len(values) > MaxSearchGroups {
+		values = values[:MaxSearchGroups]
+	}
+
+	return values
 }
