@@ -16,6 +16,7 @@ import (
 	"github.com/photoprism/photoprism/pkg/authn"
 	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/http/header"
+	"github.com/photoprism/photoprism/pkg/i18n"
 	"github.com/photoprism/photoprism/pkg/log/status"
 )
 
@@ -26,9 +27,9 @@ import (
 //	@Tags		Authentication
 //	@Accept		json
 //	@Produce	json
-//	@Param		request			body		form.OAuthCreateToken	true	"token request (supports client_credentials, password, or session grant)"
-//	@Success	200				{object}	gin.H
-//	@Failure	400,401,403,429	{object}	i18n.Response
+//	@Param		request				body		form.OAuthCreateToken	true	"token request (supports client_credentials, password, or session grant)"
+//	@Success	200					{object}	gin.H
+//	@Failure	400,401,403,413,429	{object}	i18n.Response
 //	@Router		/api/v1/oauth/token [post]
 func OAuthToken(router *gin.RouterGroup) {
 	router.POST("/oauth/token", func(c *gin.Context) {
@@ -52,6 +53,20 @@ func OAuthToken(router *gin.RouterGroup) {
 
 		// Disable caching of responses.
 		c.Header(header.CacheControl, header.CacheControlNoStore)
+
+		// Bound the body before anything reads it, including the grant_type peek below,
+		// which parses the form. Parsing it here as well reports an over-long form body as
+		// such, since the peek would otherwise cache the failure and the binding below
+		// would see an empty form rather than an error.
+		LimitRequestBodyBytes(c, MaxOAuthRequestBytes)
+
+		if c.ContentType() == header.ContentTypeForm {
+			if err := c.Request.ParseForm(); IsRequestBodyTooLarge(err) {
+				event.AuditWarn([]string{clientIp, "oauth2", actor, action, "request too large", status.Error(err)})
+				AbortRequestTooLarge(c, i18n.ErrBadRequest)
+				return
+			}
+		}
 
 		// The OIDC authorization_code grant is handled by the Portal OIDC OP, which
 		// parses and validates the request itself. Delegating here keeps a single
@@ -77,6 +92,18 @@ func OAuthToken(router *gin.RouterGroup) {
 			return
 		}
 
+		// Check the request rate limit before the body is read, so that a request which
+		// never reaches a grant is charged like any other failed attempt. The reserved
+		// tokens are returned by r.Success() once the credentials check out. The
+		// authorization_code grant above applies its own limit.
+		r := limiter.Login.Request(clientIp)
+
+		// Abort if request rate limit is exceeded.
+		if r.Reject() || limiter.Auth.Reject(clientIp) {
+			limiter.AbortJSON(c)
+			return
+		}
+
 		// Token create request form.
 		var frm form.OAuthCreateToken
 		var sess *entity.Session
@@ -89,6 +116,12 @@ func OAuthToken(router *gin.RouterGroup) {
 			frm.ClientID = clientId
 			frm.ClientSecret = clientSecret
 		} else if err = c.ShouldBind(&frm); err != nil {
+			if IsRequestBodyTooLarge(err) {
+				event.AuditWarn([]string{clientIp, "oauth2", actor, action, "request too large", status.Error(err)})
+				AbortRequestTooLarge(c, i18n.ErrBadRequest)
+				return
+			}
+
 			event.AuditWarn([]string{clientIp, "oauth2", actor, action, status.Error(err)})
 			AbortBadRequest(c, err)
 			return
@@ -98,15 +131,6 @@ func OAuthToken(router *gin.RouterGroup) {
 		if err = frm.Validate(); err != nil {
 			event.AuditWarn([]string{clientIp, "oauth2", actor, action, status.Error(err)})
 			AbortInvalidCredentials(c)
-			return
-		}
-
-		// Check request rate limit.
-		r := limiter.Login.Request(clientIp)
-
-		// Abort if request rate limit is exceeded.
-		if r.Reject() || limiter.Auth.Reject(clientIp) {
-			limiter.AbortJSON(c)
 			return
 		}
 
