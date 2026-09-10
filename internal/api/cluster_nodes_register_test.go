@@ -206,7 +206,7 @@ func TestClusterNodesRegister(t *testing.T) {
 		conf.Options().JoinToken = cluster.ExampleJoinToken
 		ClusterNodesRegister(router)
 
-		// 36 hex characters without separators pass a bare hex check but are not a UUID.
+		// Not a canonical UUID: 36 hex characters with no separators.
 		body := `{"NodeName":"pp-uuid-malformed","NodeUUID":"111111111111111111111111111111111111"}`
 		r := AuthenticatedRequestWithBody(app, http.MethodPost, "/api/v1/cluster/nodes/register", body, cluster.ExampleJoinToken)
 		assert.Equal(t, http.StatusBadRequest, r.Code)
@@ -244,8 +244,7 @@ func TestClusterNodesRegister(t *testing.T) {
 		conf.Options().JoinToken = cluster.ExampleJoinToken
 		ClusterNodesRegister(router)
 
-		// An ordinary OAuth client shares the name space with nodes, so it must not be able
-		// to promote itself into the registry by registering its own name.
+		// An ordinary OAuth client shares the name space with nodes and is not eligible.
 		regy, err := reg.NewClientRegistryWithConfig(conf)
 		assert.NoError(t, err)
 		n := &reg.Node{Node: cluster.Node{UUID: rnd.UUIDv7(), Name: "pp-plain-client", Role: "client"}}

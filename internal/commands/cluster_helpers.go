@@ -79,10 +79,9 @@ func clusterTokenExitCode(err error) int {
 }
 
 // clusterRegisterToken returns the bearer token for a register request against the Portal.
-// A node mutating its own registration is authorized by an access token minted from its client
-// credentials; a first join has none yet and uses the join token. Credentials the Portal no
-// longer honors fall back to the join token, so an operator can rejoin after a stale
-// registration is removed; the Portal still refuses a join token for a name it holds.
+// A node mutating its own registration uses an access token minted from its client credentials.
+// A first join, or credentials the Portal no longer honors, uses the join token; the Portal
+// still refuses that for a name it holds, so the fallback widens nothing.
 func clusterRegisterToken(conf *config.Config, portalURL, joinToken, nodeName string) (string, error) {
 	id, secret := strings.TrimSpace(conf.NodeClientID()), strings.TrimSpace(conf.NodeClientSecret())
 

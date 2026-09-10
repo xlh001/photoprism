@@ -163,7 +163,7 @@ func rotateNodeViaPortal(conf *config.Config, portalURL, joinToken, name string,
 	endpointUrl := stringsTrimRightSlash(portalURL) + "/api/v1/cluster/nodes/register"
 
 	if err = postWithBackoff(endpointUrl, token, marshalRegisterRequest(payload), &resp); err != nil {
-		// Map common HTTP errors similarly to register command
+		// Map the Portal's response status to a CLI exit code.
 		var he *httpError
 
 		if errors.As(err, &he) {

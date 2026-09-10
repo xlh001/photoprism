@@ -195,8 +195,8 @@ func ClusterNodesRegister(router *gin.RouterGroup) {
 				return
 			}
 
-			// Only a node client registers a node, so an OAuth client of another role cannot
-			// add itself to the registry by reusing its own name.
+			// Only a node client registers a node, and the registry shares its name space
+			// with ordinary OAuth clients.
 			if role := cluster.NormalizeNodeRole(existingNode.Role); role != cluster.RoleInstance && role != cluster.RoleService {
 				event.AuditWarn([]string{clientIp, string(acl.ResourceCluster), "node", "%s", "client role not allowed", status.Denied}, clean.Log(name))
 				AbortForbidden(c)
@@ -422,8 +422,7 @@ func ClusterNodesRegister(router *gin.RouterGroup) {
 		}
 
 		// A join creates an OAuth client, so the role it may carry is limited to the node
-		// roles rather than taken from the request. An omitted role defaults to instance;
-		// anything the request does name must resolve to a node role.
+		// roles rather than taken from the request.
 		nodeRole := cluster.RoleInstance
 
 		if strings.TrimSpace(req.NodeRole) != "" {
@@ -816,9 +815,8 @@ func registerUUIDConflictError(uuid string) string {
 }
 
 // nodeUUIDClaimedBy reports whether a node UUID is registered to a different client.
-// The UUID names a registration rather than proving ownership of it, so a request may only
-// carry one that is unassigned or already the caller's own. Every record sharing the UUID is
-// checked, as the column is not unique.
+// The UUID names a registration rather than proving ownership of one, so a request may carry
+// only an unassigned value or its own. The column is not unique, so every match is checked.
 func nodeUUIDClaimedBy(uuid, clientID string) bool {
 	if uuid == "" {
 		return false

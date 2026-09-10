@@ -104,7 +104,7 @@ func TestRotateNodeInRegistry(t *testing.T) {
 		}
 	})
 	t.Run("NotANodeClient", func(t *testing.T) {
-		// An ordinary OAuth client shares the name space and must not be rotated as a node.
+		// An ordinary OAuth client shares the name space and is not eligible.
 		other := entity.NewClient()
 		other.ClientName = "pp-rotate-plain"
 		assert.NoError(t, other.Create())
