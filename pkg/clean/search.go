@@ -85,10 +85,9 @@ func SearchString(s string) string {
 	return strings.Trim(s, "|<>\n\r\t")
 }
 
-// SearchTerms bounds a search value to LengthLimit, the limit SearchString applies to values
-// parsed from a query expression, so a value bound straight from a request carries the same
-// bound. Each term expands into its own condition, so this input sizes the statement.
-// A value within the limit is returned unchanged.
+// SearchTerms bounds a search value to LengthLimit, the limit SearchString applies to a value
+// parsed from a query expression. Each term expands into its own condition, so this input sizes
+// the statement, and a value within the limit is returned unchanged.
 func SearchTerms(s string) string {
 	if len(s) <= LengthLimit {
 		return s

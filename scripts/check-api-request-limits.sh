@@ -35,11 +35,8 @@ excluded() {
 violations=()
 
 # check_file flags request-body sinks in a function that never calls
-# LimitRequestBodyBytes. Covered sinks: every c.Bind* variant, form parsing
-# (c.PostForm, c.FormFile, ParseForm, ParseMultipartForm), <name>.ServeHTTP(<writer>,
-# c.Request), and direct io.ReadAll / json.NewDecoder / xml.NewDecoder /
-# yaml.NewDecoder on c.Request.Body. Form parsing and the content-type-driven binds
-# read the body only on a write method, so those are flagged per enclosing route.
+# LimitRequestBodyBytes. Form parsing and the content-type-driven binds reach the
+# body only on a write method, so those are flagged per enclosing route.
 check_file() {
   local file="$1"
   local rel="${file#"$ROOT_DIR"/}"
