@@ -2600,6 +2600,10 @@ msgstr "Subida manual"
 msgid "Maps"
 msgstr "Mapas"
 
+#: src/component/map.vue:118 src/page/places.vue:430 src/page/places.vue:435
+msgid "Maps are unavailable. Try another browser or device."
+msgstr ""
+
 #: src/common/util.js:898 src/model/marker.js:132
 msgid "Marker"
 msgstr "Marcador"
@@ -2837,7 +2841,7 @@ msgstr "No hay personas"
 #: src/component/photo/view/cards.vue:9 src/component/photo/view/list.vue:9
 #: src/component/photo/view/mosaic.vue:9 src/page/album/photos.vue:582
 #: src/page/library/browse.vue:31 src/page/photos.vue:720
-#: src/page/places.vue:761 src/page/places.vue:882
+#: src/page/places.vue:758 src/page/places.vue:883
 msgid "No pictures found"
 msgstr "No se han encontrado imágenes"
 
@@ -4760,10 +4764,6 @@ msgstr "Los clientes de WebDAV, como Microsoft Windows Explorer o Finder de Appl
 msgid "WebDAV Upload"
 msgstr "Subida WebDAV"
 
-#: src/page/places.vue:441
-msgid "WebGL support is disabled in your browser"
-msgstr "El soporte WebGL está desactivado en tu navegador"
-
 #: src/page/settings/account.vue:335 src/page/settings/account.vue:391
 #: src/page/settings/account.vue:308
 msgid "Website"
@@ -4864,10 +4864,6 @@ msgstr "Su cuenta no pudo ser conectada"
 msgid "Your account has been successfully connected."
 msgstr "Su cuenta se ha conectado correctamente."
 
-#: src/page/places.vue:445
-msgid "Your browser does not support WebGL"
-msgstr "Tu navegador no soporta WebGL"
-
 #: src/page/about/about.vue:48 src/page/about/about.vue:86
 #: src/component/confirm/sponsor.vue:18 src/page/about/about.vue:33
 #: src/page/about/about.vue:67 src/page/connect.vue:96
@@ -4936,6 +4932,12 @@ msgstr "Título"
 msgctxt "Verb"
 msgid "Archive"
 msgstr "Archivar"
+
+#~ msgid "WebGL support is disabled in your browser"
+#~ msgstr "El soporte WebGL está desactivado en tu navegador"
+
+#~ msgid "Your browser does not support WebGL"
+#~ msgstr "Tu navegador no soporta WebGL"
 
 #~ msgid "Create"
 #~ msgstr "Creado"
