@@ -1392,7 +1392,7 @@ func (m *User) RedeemToken(token string) (n int) {
 	}
 
 	// Find links.
-	links := FindValidLinks(token, "")
+	links := FindValidLinksByToken(token, "")
 
 	// Found?
 	if n = len(links); n == 0 {
