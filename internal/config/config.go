@@ -28,6 +28,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	iofs "io/fs"
 	"math/rand/v2"
 	"net/http"
 	"os"
@@ -652,7 +653,9 @@ func (c *Config) loadOptionsYAML() (string, Values, error) {
 	}
 
 	if err = yaml.Unmarshal(b, &values); err != nil {
-		return fileName, nil, fmt.Errorf("failed parsing %s: %w", fileName, err)
+		// The file name is carried as the error's path rather than as message text, so
+		// that a renderer can find it.
+		return fileName, nil, &iofs.PathError{Op: "parse", Path: fileName, Err: err}
 	}
 
 	if values == nil {
@@ -773,7 +776,7 @@ func readSerialFile(fileName string) string {
 	case os.IsNotExist(err):
 		return ""
 	case err != nil:
-		event.SystemWarn([]string{"config", "serial", "read %s", "%s"}, clean.Log(fileName), clean.Error(err))
+		event.SystemWarn([]string{"config", "serial", "read %s", "%s"}, clean.Log(fileName), clean.ErrorFull(err))
 		return ""
 	}
 
@@ -802,7 +805,7 @@ func (c *Config) restoreSerial(serial string) {
 		}
 
 		if err := os.WriteFile(f.Name, []byte(serial), f.Mode); err != nil {
-			event.SystemWarn([]string{"config", "serial", "restore %s", "%s"}, clean.Log(f.Name), clean.Error(err))
+			event.SystemWarn([]string{"config", "serial", "restore %s", "%s"}, clean.Log(f.Name), clean.ErrorFull(err))
 		} else {
 			event.SystemInfo([]string{"config", "serial", "restore %s", status.Succeeded}, clean.Log(f.Name))
 		}
@@ -1005,7 +1008,7 @@ func (c *Config) Shutdown() {
 
 	// Reported on the console-only system log, as the database backing the error log is going away.
 	if err := c.CloseDb(); err != nil {
-		event.SystemError([]string{"config", "database", "close", "%s"}, clean.Error(err))
+		event.SystemError([]string{"config", "database", "close", "%s"}, clean.ErrorFull(err))
 	} else {
 		event.SystemDebug([]string{"config", "database", "close", status.Succeeded})
 	}
@@ -1036,7 +1039,7 @@ func (c *Config) RenewApiKeysWithToken(token string) error {
 			return i18n.Error(i18n.ErrAccountConnect)
 		}
 	} else if err = c.hub.Save(); err != nil {
-		log.Warnf("config: failed to save API keys for maps and places (%s)", err)
+		log.Warnf("config: failed to save API keys for maps and places (%s)", clean.Error(err))
 		return i18n.Error(i18n.ErrSaveFailed)
 	} else {
 		c.hub.Propagate()

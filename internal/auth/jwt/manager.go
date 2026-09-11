@@ -313,13 +313,13 @@ func (m *Manager) loadKeys() error {
 		keyPath := filepath.Join(dir, name)
 		b, err := os.ReadFile(keyPath) // #nosec G304 path is derived from trusted directory entries
 		if err != nil {
-			log.Warnf("jwt: %s (read signing key %s)", err, clean.Log(name))
+			log.Warnf("jwt: %s (read signing key %s)", clean.Error(err), clean.Log(name))
 			continue
 		}
 
 		var rec keyRecord
 		if err = json.Unmarshal(b, &rec); err != nil {
-			log.Warnf("jwt: %s (parse signing key %s)", err, clean.Log(name))
+			log.Warnf("jwt: %s (parse signing key %s)", clean.Error(err), clean.Log(name))
 			continue
 		}
 		if rec.Kty != keyTypeOKP || rec.Crv != curveEd25519 || rec.Kid == "" {
@@ -328,7 +328,7 @@ func (m *Manager) loadKeys() error {
 
 		privBytes, err := base64.RawURLEncoding.DecodeString(rec.D)
 		if err != nil {
-			log.Warnf("jwt: %s (decode signing key %s)", err, clean.Log(name))
+			log.Warnf("jwt: %s (decode signing key %s)", clean.Error(err), clean.Log(name))
 			continue
 		}
 		if len(privBytes) != ed25519.SeedSize {

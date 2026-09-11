@@ -58,19 +58,17 @@ func WebDAV(dir string, router *gin.RouterGroup, conf *config.Config) {
 	// Request logger function.
 	loggerFunc := func(request *http.Request, err error) {
 		if err != nil {
-			// Route WebDAV request errors to the console-only system log, not log.*.
-			// x/net/webdav embeds absolute originals/import paths in its messages,
-			// which must stay out of the browser log viewer and the persisted errors
-			// table; operators still see full detail in the server console.
+			// Reported on the console-only system log, which is the operator's channel:
+			// x/net/webdav renders absolute local paths into these messages.
 			switch {
 			case request.Method == header.MethodMkcol && errors.Is(err, os.ErrExist):
 				// MKCOL on an existing collection is a benign probe: sync clients such as
 				// PhotoSync test for a directory before creating it — expected, not a failure.
 				event.SystemDebug([]string{"webdav", "collection %s already exists"}, clean.Log(request.URL.String()))
 			case WebDAVWriteMethod(request.Method):
-				event.SystemError([]string{"webdav", "%s in %s %s"}, clean.Error(err), clean.Log(request.Method), clean.Log(request.URL.String()))
+				event.SystemError([]string{"webdav", "%s in %s %s"}, clean.ErrorFull(err), clean.Log(request.Method), clean.Log(request.URL.String()))
 			default:
-				event.SystemDebug([]string{"webdav", "%s in %s %s"}, clean.Error(err), clean.Log(request.Method), clean.Log(request.URL.String()))
+				event.SystemDebug([]string{"webdav", "%s in %s %s"}, clean.ErrorFull(err), clean.Log(request.Method), clean.Log(request.URL.String()))
 			}
 		} else {
 			// Determine the filename if it is an uploaded file and process custom request headers, if any.
@@ -291,15 +289,15 @@ func WebDAVSetFavoriteFlag(fileName string) {
 
 	// Make sure directory exists.
 	if err := fs.MkdirAll(filepath.Dir(yamlName)); err != nil {
-		// Console-only: the error embeds the absolute sidecar path (see loggerFunc).
-		event.SystemError([]string{"webdav", "%s"}, clean.Error(err))
+		// Reported on the console: the error renders the absolute sidecar path.
+		event.SystemError([]string{"webdav", "%s"}, clean.ErrorFull(err))
 		return
 	}
 
 	// Write YAML data to file.
 	if err := fs.WriteFile(yamlName, []byte("Favorite: true\n"), fs.ModeConfigFile); err != nil {
-		// Console-only: the error embeds the absolute sidecar path (see loggerFunc).
-		event.SystemError([]string{"webdav", "%s"}, clean.Error(err))
+		// Reported on the console: the error renders the absolute sidecar path.
+		event.SystemError([]string{"webdav", "%s"}, clean.ErrorFull(err))
 		return
 	}
 

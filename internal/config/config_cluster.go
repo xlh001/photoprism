@@ -381,7 +381,7 @@ func (c *Config) JoinToken() string {
 
 		if fs.FileExistsNotEmpty(fileName) {
 			if b, err := os.ReadFile(fileName); err != nil || len(b) == 0 { //nolint:gosec // path derived from config directory
-				event.SystemWarn([]string{"config", "cluster join token", "read %s", "%s"}, clean.Log(fileName), clean.Error(err))
+				event.SystemWarn([]string{"config", "cluster join token", "read %s", "%s"}, clean.Log(fileName), clean.ErrorFull(err))
 			} else if s := strings.TrimSpace(string(b)); rnd.IsJoinToken(s, false) {
 				if c.cache != nil {
 					c.cache.SetDefault(fileName, s)
@@ -568,7 +568,7 @@ func (c *Config) NodeUUID() string {
 	c.options.NodeUUID = uuid
 
 	if err := c.SaveNodeUUID(uuid); err != nil {
-		log.Warnf("config: could not save node UUID to %s (%s)", c.OptionsYaml(), err)
+		log.Warnf("config: could not save node UUID (%s)", clean.Error(err))
 	}
 
 	return uuid
@@ -599,7 +599,7 @@ func (c *Config) NodeClientSecret() string {
 		if _, err := os.Stat(fileName); os.IsNotExist(err) {
 			event.SystemDebug([]string{"config", "node client secret", "%s", "not found"}, clean.Log(fileName))
 		} else if err != nil {
-			event.SystemWarn([]string{"config", "node client secret", "read %s", "%s"}, clean.Log(fileName), clean.Error(err))
+			event.SystemWarn([]string{"config", "node client secret", "read %s", "%s"}, clean.Log(fileName), clean.ErrorFull(err))
 		}
 	}
 

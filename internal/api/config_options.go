@@ -12,6 +12,7 @@ import (
 	"github.com/photoprism/photoprism/internal/entity"
 	"github.com/photoprism/photoprism/internal/mutex"
 	"github.com/photoprism/photoprism/internal/photoprism/get"
+	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/i18n"
 )
 
@@ -86,8 +87,8 @@ func SaveConfigOptions(router *gin.RouterGroup) {
 				return
 			}
 
-			log.Errorf("config: failed saving options patch (%s)", err)
-			c.AbortWithStatusJSON(http.StatusInternalServerError, err)
+			log.Errorf("config: failed saving options patch (%s)", clean.Error(err))
+			AbortSaveFailed(c)
 			return
 		}
 
