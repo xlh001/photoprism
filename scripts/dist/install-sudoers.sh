@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
-# Installs the sudoers drop-in that lets the entrypoint run the init script as root.
+# Installs the sudoers drop-in that lets the entrypoint run the init script as root, and records
+# the image identity the scripts read at startup.
 # Pass --develop in development images, where all targets and scripts may be run with sudo.
+# Pass --image <name> to name the published image (develop | ce | plus | pro | portal).
 # Run this as a file in the scripts directory, as the rules name the init script beside it.
 
 PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/scripts:$PATH"
@@ -68,10 +70,36 @@ INIT_SCRIPT="${SCRIPTS_DIR}/entrypoint-init.sh"
 SUDOERS_FILE="/etc/sudoers.d/init"
 SUDOERS_TMP=$(mktemp)
 
-# Records the environment the image was built for, so that the init script does not have to
-# take it from the caller. Written here because this is where the two image families differ.
-DOCKER_ENV_FILE="${SCRIPTS_DIR}/.docker-env"
+# Records what the image is, so that the startup scripts do not have to take it from the caller.
+# Written here because this is where the two image families differ.
+IMAGE_ENV_FILE="${SCRIPTS_DIR}/.env"
 DOCKER_ENV_NAME="prod"
+DOCKER_IMG_NAME="develop"
+DEVELOP=0
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --develop) DEVELOP=1; shift ;;
+    --image)
+      if [[ -z $2 ]]; then
+        echo "Error: --image needs a name." 1>&2
+        exit 1
+      fi
+      DOCKER_IMG_NAME=$2
+      shift 2
+      ;;
+    *)
+      echo "Error: unknown argument '$1'." 1>&2
+      exit 1
+      ;;
+  esac
+done
+
+# The names the startup scripts branch on, rejected here rather than at every reader.
+case ${DOCKER_IMG_NAME} in
+  develop | ce | plus | pro | portal) ;;
+  *) echo "Error: unknown image name '${DOCKER_IMG_NAME}'." 1>&2; exit 1 ;;
+esac
 
 # Variables the init script and the targets it runs read from the environment. Only these are
 # passed on, so that the caller cannot supply the ones that change how a command interprets
@@ -84,7 +112,7 @@ INIT_ENV="DOCKER_ENV TF_VERSION ONNX_GPU ONNX_VERSION \
 http_proxy https_proxy ftp_proxy all_proxy no_proxy HTTP_PROXY HTTPS_PROXY FTP_PROXY ALL_PROXY NO_PROXY \
 PHOTOPRISM_*"
 
-if [[ $1 == "--develop" ]]; then
+if [[ ${DEVELOP} == 1 ]]; then
   # Development images allow every target and script to be run with sudo.
   SUDOERS_FILE="/etc/sudoers.d/all"
   DOCKER_ENV_NAME="develop"
@@ -107,8 +135,11 @@ visudo -c -f "${SUDOERS_TMP}"
 install -m 0440 -o root -g root "${SUDOERS_TMP}" "${SUDOERS_FILE}"
 rm -f "${SUDOERS_TMP}"
 
-printf '%s\n' "${DOCKER_ENV_NAME}" > "${DOCKER_ENV_FILE}"
-chown root:root "${DOCKER_ENV_FILE}"
-chmod 0444 "${DOCKER_ENV_FILE}"
+printf '%s\n' \
+  "DOCKER_ENV=${DOCKER_ENV_NAME}" \
+  "DOCKER_IMG=${DOCKER_IMG_NAME}" \
+  > "${IMAGE_ENV_FILE}"
+chown root:root "${IMAGE_ENV_FILE}"
+chmod 0444 "${IMAGE_ENV_FILE}"
 
-echo "✅ Installed ${SUDOERS_FILE} for ${INIT_SCRIPT} (${DOCKER_ENV_NAME})."
+echo "✅ Installed ${SUDOERS_FILE} for ${INIT_SCRIPT} (${DOCKER_ENV_NAME}, ${DOCKER_IMG_NAME})."

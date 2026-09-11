@@ -20,16 +20,20 @@ export DEBIAN_FRONTEND="noninteractive"
 # stay beside it wherever the scripts are installed.
 INIT_SCRIPTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P)
 INIT_LOCK="${INIT_SCRIPTS}/.init-lock"
-DOCKER_ENV_FILE="${INIT_SCRIPTS}/.docker-env"
+IMAGE_ENV_FILE="${INIT_SCRIPTS}/.env"
 
 # Prefer the environment recorded when the image was built, since it is a property of the
 # image rather than something to be chosen per run. Without that file, use the restricted
 # settings rather than the caller's value; a source checkout can opt in by creating it.
-if [[ -r ${DOCKER_ENV_FILE} ]]; then
-  read -r DOCKER_ENV < "${DOCKER_ENV_FILE}"
-else
-  DOCKER_ENV="prod"
+# Parsed rather than sourced: this runs as root, and a parse cannot execute what it reads.
+# Cleared first, so that an inherited value cannot survive a missing file or a missing key.
+DOCKER_ENV=""
+
+if [[ -r ${IMAGE_ENV_FILE} ]]; then
+  DOCKER_ENV=$(sed -n 's/^DOCKER_ENV=//p' "${IMAGE_ENV_FILE}" | head -1)
 fi
+
+DOCKER_ENV=${DOCKER_ENV:-prod}
 
 export DOCKER_ENV
 

@@ -109,5 +109,4 @@ Dockerfile.local*
 .swp
 
 # Artifacts written by scripts/dist/install-sudoers.sh when run from a checkout.
-scripts/dist/.docker-env
 scripts/dist/.init-lock
