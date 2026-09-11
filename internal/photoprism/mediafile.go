@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg" // register JPEG decoder
 	_ "image/png"  // register PNG decoder
 	"io"
+	iofs "io/fs"
 	"math"
 	"os"
 	"path"
@@ -125,7 +126,7 @@ func NewMediaFileSkipResolve(fileName string, fileNameResolved string) (*MediaFi
 	// Check if the file exists and is not empty.
 	if size, _, err := m.Stat(); err != nil {
 		// Return error if os.Stat() failed.
-		return m, fmt.Errorf("%s not found", clean.Log(m.RootRelName()))
+		return m, &iofs.PathError{Op: "stat", Path: m.fileName, Err: err}
 	} else if size == 0 {
 		// Notify the user that the file is empty.
 		log.Infof("media: %s is empty", clean.Log(m.RootRelName()))

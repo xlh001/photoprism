@@ -3,7 +3,6 @@ package api
 import (
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -77,7 +76,7 @@ func SaveConfigOptions(router *gin.RouterGroup) {
 
 		// Only options the API returns may be set through it.
 		if removed := config.RemoveUnsupportedOptionValues(v); len(removed) > 0 {
-			log.Debugf("config: ignored %s in options update", strings.Join(removed, ", "))
+			log.Debugf("config: ignored %s in options update", clean.LogNames(removed))
 		}
 
 		if _, err := conf.SaveOptionsPatch(v); err != nil {

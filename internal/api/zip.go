@@ -168,7 +168,7 @@ func ZipCreate(router *gin.RouterGroup) {
 
 			if fs.FileExists(fileName) {
 				if zipErr := fs.ZipFile(zipWriter, fileName, alias, false); zipErr != nil {
-					log.Errorf("download: failed to add %s (%s)", clean.Log(file.FileName), zipErr)
+					log.Errorf("download: failed to add %s (%s)", clean.Log(file.FileName), clean.Error(zipErr))
 					Abort(c, http.StatusInternalServerError, i18n.ErrZipFailed)
 					return
 				}

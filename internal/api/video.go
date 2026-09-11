@@ -110,7 +110,7 @@ func GetVideo(router *gin.RouterGroup) {
 				AbortVideo(c)
 				return
 			} else if reader, readErr := video.NewReader(videoFileName, info.VideoOffset); readErr != nil {
-				log.Errorf("video: failed to read media embedded in %s (%s)", clean.Log(f.FileName), readErr)
+				log.Errorf("video: failed to read media embedded in %s (%s)", clean.Log(f.FileName), clean.Error(readErr))
 				AbortVideo(c)
 				return
 			} else if c.Request.Header.Get("Range") == "" && info.VideoCodec == format.Codec {

@@ -7,6 +7,35 @@ import (
 	"github.com/photoprism/photoprism/pkg/txt/clip"
 )
 
+const (
+	// LogNamesLimit is the number of names LogNames renders before it counts the rest.
+	LogNamesLimit = 10
+	// LogNamesBytes is the budget LogNames gives each name it renders.
+	LogNamesBytes = 128
+)
+
+// LogNames sanitizes a list of names for logging and counts those beyond LogNamesLimit, so that
+// the length of the message follows the two limits and not the length of the list. Each name is
+// bounded in bytes rather than characters, which keeps a multi-byte name inside the same budget.
+func LogNames(names []string) string {
+	if len(names) == 0 {
+		return "''"
+	}
+
+	kept := min(len(names), LogNamesLimit)
+	out := make([]string, 0, kept)
+
+	for _, name := range names[:kept] {
+		out = append(out, Log(clip.Bytes(name, LogNamesBytes)))
+	}
+
+	if omitted := len(names) - kept; omitted > 0 {
+		return fmt.Sprintf("%s and %d more", strings.Join(out, ", "), omitted)
+	}
+
+	return strings.Join(out, ", ")
+}
+
 // Log sanitizes strings created from user input in response to the log4j debacle.
 func Log(s string) string {
 	if s == "" {

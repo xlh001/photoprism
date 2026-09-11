@@ -141,7 +141,7 @@ func StartImport(router *gin.RouterGroup) {
 		// Delete empty import directory.
 		if srcFolder != "" && importPath != conf.ImportPath() && fs.DirIsEmpty(importPath) {
 			if err := os.Remove(importPath); err != nil {
-				log.Errorf("import: failed to delete empty folder %s: %s", clean.Log(importPath), err)
+				log.Errorf("import: failed to delete empty folder %s (%s)", clean.Log(importPath), clean.Error(err))
 			} else {
 				log.Infof("import: deleted empty folder %s", clean.Log(importPath))
 			}
@@ -155,7 +155,7 @@ func StartImport(router *gin.RouterGroup) {
 			if moments := get.Moments(); moments == nil {
 				log.Warnf("import: moments service not set - you may have found a bug")
 			} else if err := moments.Start(); err != nil {
-				log.Warnf("moments: %s", err)
+				log.Warnf("moments: %s", clean.Error(err))
 			}
 		}
 
@@ -183,7 +183,7 @@ func StartImport(router *gin.RouterGroup) {
 
 		// Update album, label, and subject cover thumbs.
 		if err := query.UpdateCovers(); err != nil {
-			log.Warnf("index: %s (update covers)", err)
+			log.Warnf("index: %s (update covers)", clean.Error(err))
 		}
 
 		c.JSON(http.StatusOK, i18n.NewResponse(http.StatusOK, i18n.MsgImportCompletedIn, elapsed))
