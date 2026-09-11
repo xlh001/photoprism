@@ -23,26 +23,34 @@ INIT_LOCK="${INIT_SCRIPTS}/.init-lock"
 DOCKER_ENV_FILE="${INIT_SCRIPTS}/.docker-env"
 
 # Prefer the environment recorded when the image was built, since it is a property of the
-# image rather than something to be chosen per run. DOCKER_ENV applies only without it,
-# such as when this script is run directly from a source checkout.
+# image rather than something to be chosen per run. Without that file, use the restricted
+# settings rather than the caller's value; a source checkout can opt in by creating it.
 if [[ -r ${DOCKER_ENV_FILE} ]]; then
   read -r DOCKER_ENV < "${DOCKER_ENV_FILE}"
+else
+  DOCKER_ENV="prod"
 fi
+
+export DOCKER_ENV
 
 # regular expressions
 re='^[0-9]+$'
 
-# init_dirs prints the entries of the given list that are real directories.
-# Entries that are missing or are symlinks are skipped, since chown and chmod
-# dereference a symlink given as an argument.
-init_dirs() {
-  local init_dir
+# init_in_dir runs a command inside the given directory, which must be one the image
+# created itself. It enters the directory first and lets the command act on ".", so the
+# update applies to the directory the process is in rather than to a path that is
+# resolved a second time and may no longer lead to the same place.
+init_in_dir() {
+  local init_dir=$1
 
-  for init_dir in "$@"; do
-    if [[ -d ${init_dir} ]] && [[ ! -L ${init_dir} ]]; then
-      printf '%s\n' "${init_dir}"
-    fi
-  done
+  shift
+
+  if [[ ! -d ${init_dir} ]] || [[ -L ${init_dir} ]]; then
+    echo "init: skipping ${init_dir}" 1>&2
+    return 0
+  fi
+
+  (cd -P "${init_dir}" && [[ $(pwd -P) == "${init_dir}" ]] && "$@")
 }
 
 # init_target runs a single init target from the Makefile in INIT_SCRIPTS.
@@ -99,16 +107,13 @@ if [[ ${PHOTOPRISM_UID} =~ $re ]] && [[ ${PHOTOPRISM_UID} != "0" ]]; then
   if [[ -z ${PHOTOPRISM_DISABLE_CHOWN} ]] || [[ ${PHOTOPRISM_DISABLE_CHOWN} == "false" ]]; then
     echo "init: updating filesystem permissions"
     echo "PHOTOPRISM_DISABLE_CHOWN=\"true\" disables permission updates"
-    mapfile -t CHOWN_REAL < <(init_dirs "${CHOWN_DIRS[@]}")
-    mapfile -t CHMOD_REAL < <(init_dirs "${CHMOD_DIRS[@]}")
+    for INIT_DIR in "${CHOWN_DIRS[@]}"; do
+      init_in_dir "${INIT_DIR}" chown --preserve-root --silent -R "${CHOWN}" .
+    done
 
-    if [[ ${#CHOWN_REAL[@]} -gt 0 ]]; then
-      chown --preserve-root --silent -R "${CHOWN}" "${CHOWN_REAL[@]}"
-    fi
-
-    if [[ ${#CHMOD_REAL[@]} -gt 0 ]]; then
-      chmod --preserve-root --silent -R u+rwX "${CHMOD_REAL[@]}"
-    fi
+    for INIT_DIR in "${CHMOD_DIRS[@]}"; do
+      init_in_dir "${INIT_DIR}" chmod --preserve-root --silent -R u+rwX .
+    done
   fi
 fi
 
