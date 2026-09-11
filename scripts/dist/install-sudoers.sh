@@ -20,7 +20,11 @@ SUDOERS_FILE="/etc/sudoers.d/init"
 # Variables the init script and the targets it runs read from the environment. Only these are
 # passed on, so that the caller cannot supply the ones that change how a command interprets
 # its input, such as the variables GNU make accepts options and additional makefiles through.
-INIT_ENV="DOCKER_ENV DOCKER_TAG BUILD_ARCH TF_DRIVER TF_VERSION ONNX_GPU ONNX_VERSION PHOTOPRISM_*"
+# The proxy variables are included because the init targets download packages and models, and
+# nothing else provides them; every download uses TLS, and apt verifies its own signatures.
+INIT_ENV="DOCKER_ENV DOCKER_TAG BUILD_ARCH TF_DRIVER TF_VERSION ONNX_GPU ONNX_VERSION DEBIAN_FRONTEND \
+http_proxy https_proxy ftp_proxy all_proxy no_proxy HTTP_PROXY HTTPS_PROXY FTP_PROXY ALL_PROXY NO_PROXY \
+PHOTOPRISM_*"
 
 if [[ $1 == "--develop" ]]; then
   # Development images allow every target and script to be run with sudo.
