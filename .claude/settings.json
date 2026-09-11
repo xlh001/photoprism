@@ -15,5 +15,9 @@
     ],
     "defaultMode": "acceptEdits"
   },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
   "awaySummaryEnabled": false
 }
