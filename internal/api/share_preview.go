@@ -81,7 +81,9 @@ func SharePreview(router *gin.RouterGroup) {
 
 		var frm form.SearchPhotos
 
-		// Covers may only contain public content in shared albums.
+		// Covers may only contain public content in shared albums. SharedPhotos below applies
+		// the same five constraints after any smart-album filter, so the values here are the
+		// request's starting point rather than the boundary.
 		frm.Album = shared
 		frm.Public = true
 		frm.Private = false
@@ -100,7 +102,7 @@ func SharePreview(router *gin.RouterGroup) {
 			return
 		}
 
-		p, count, err := search.Photos(frm)
+		p, count, err := search.SharedPhotos(frm)
 
 		if err != nil {
 			log.Error(err)

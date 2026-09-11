@@ -35,23 +35,32 @@ var PhotosColsView = SelectString(Photo{}, SelectCols(GeoResult{}, []string{"*"}
 
 // Photos finds PhotoResults based on the search form without checking rights or permissions.
 func Photos(frm form.SearchPhotos) (results PhotoResults, count int, err error) {
-	return searchPhotos(frm, nil, PhotosColsAll)
+	return searchPhotos(frm, nil, PhotosColsAll, false)
+}
+
+// SharedPhotos finds PhotoResults for a context that renders to anyone holding a link, such as a
+// share preview or an album cover. A smart album's stored filter is parsed as usual, and the
+// public-only constraints are applied after it.
+func SharedPhotos(frm form.SearchPhotos) (results PhotoResults, count int, err error) {
+	return searchPhotos(frm, nil, PhotosColsAll, true)
 }
 
 // UserPhotos finds PhotoResults based on the search form and user session.
 func UserPhotos(frm form.SearchPhotos, sess *entity.Session) (results PhotoResults, count int, err error) {
-	return searchPhotos(frm, sess, PhotosColsAll)
+	return searchPhotos(frm, sess, PhotosColsAll, false)
 }
 
 // PhotoIds finds photo and file ids based on the search form provided and returns them as PhotoResults.
 func PhotoIds(frm form.SearchPhotos) (files PhotoResults, count int, err error) {
 	frm.Merged = false
 	frm.Primary = true
-	return searchPhotos(frm, nil, "photos.id, photos.photo_uid, files.file_uid")
+	return searchPhotos(frm, nil, "photos.id, photos.photo_uid, files.file_uid", false)
 }
 
-// searchPhotos finds photos based on the search form and user session then returns them as PhotoResults.
-func searchPhotos(frm form.SearchPhotos, sess *entity.Session, resultCols string) (results PhotoResults, count int, err error) {
+// searchPhotos finds photos based on the search form and user session then returns them as
+// PhotoResults. When shared is set, the selection is bounded to public content after any stored
+// album filter has been parsed.
+func searchPhotos(frm form.SearchPhotos, sess *entity.Session, resultCols string, shared bool) (results PhotoResults, count int, err error) {
 	start := time.Now()
 
 	// Parse query string and filter.
@@ -133,6 +142,17 @@ func searchPhotos(frm form.SearchPhotos, sess *entity.Session, resultCols string
 		}
 	} else {
 		frm.Scope = ""
+	}
+
+	// Applied after the stored filter above, so what a link exposes is decided by the context
+	// the request arrived in. These are the same constraints the session block below applies to
+	// a role without delete or full file access, which every share-link visitor is.
+	if shared {
+		frm.Public = true
+		frm.Private = false
+		frm.Hidden = false
+		frm.Archived = false
+		frm.Review = false
 	}
 
 	// Check session permissions and apply as needed.
