@@ -660,13 +660,13 @@ reset-mariadb:
 reset-mariadb-testdb:
 	$(info Resetting testdb database...)
 	$(MARIADB) < scripts/sql/reset-testdb.sql
-	$(MARIADB) -N -B -e "SELECT CONCAT('DROP DATABASE ', schema_name, ';') FROM information_schema.schemata WHERE schema_name LIKE 'acceptance\_%'" | $(MARIADB)
+	$(MARIADB) -N -B -e "SELECT CONCAT('DROP DATABASE \`', schema_name, '\`;') FROM information_schema.schemata WHERE schema_name LIKE 'acceptance\_%'" | $(MARIADB)
 reset-mariadb-local:
 	$(info Resetting local database...)
 	$(MARIADB) < scripts/sql/reset-local.sql
 reset-mariadb-acceptance:
 	$(info Resetting acceptance databases...)
-	$(MARIADB) -N -B -e "SELECT CONCAT('DROP DATABASE ', schema_name, ';') FROM information_schema.schemata WHERE schema_name LIKE 'acceptance\_%'" | $(MARIADB)
+	$(MARIADB) -N -B -e "SELECT CONCAT('DROP DATABASE \`', schema_name, '\`;') FROM information_schema.schemata WHERE schema_name LIKE 'acceptance\_%'" | $(MARIADB)
 	$(MARIADB) < scripts/sql/reset-acceptance.sql
 reset-mariadb-all: reset-mariadb-testdb reset-mariadb-local reset-mariadb-acceptance
 reset-testdb: reset-sqlite reset-mariadb-testdb
