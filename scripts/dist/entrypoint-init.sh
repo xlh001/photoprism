@@ -16,6 +16,19 @@ unset MAKEFLAGS GNUMAKEFLAGS MAKEFILES MFLAGS
 # regular expressions
 re='^[0-9]+$'
 
+# init_dirs prints the entries of the given list that are real directories.
+# An entry that has been replaced by a symlink is skipped, as chown and chmod
+# follow a symlink given as an argument and would change its target instead.
+init_dirs() {
+  local init_dir
+
+  for init_dir in "$@"; do
+    if [[ -d ${init_dir} ]] && [[ ! -L ${init_dir} ]]; then
+      printf '%s\n' "${init_dir}"
+    fi
+  done
+}
+
 # init_target runs a single init target from the Makefile in INIT_SCRIPTS.
 # Names are limited to plain target names, as make would otherwise read them
 # as an option or as a variable assignment instead.
@@ -72,8 +85,16 @@ if [[ ${PHOTOPRISM_UID} =~ $re ]] && [[ ${PHOTOPRISM_UID} != "0" ]]; then
   if [[ -z ${PHOTOPRISM_DISABLE_CHOWN} ]] || [[ ${PHOTOPRISM_DISABLE_CHOWN} == "false" ]]; then
     echo "init: updating filesystem permissions"
     echo "PHOTOPRISM_DISABLE_CHOWN=\"true\" disables permission updates"
-    chown --preserve-root --silent -R "${CHOWN}" "${CHOWN_DIRS[@]}"
-    chmod --preserve-root --silent -R u+rwX "${CHMOD_DIRS[@]}"
+    mapfile -t CHOWN_REAL < <(init_dirs "${CHOWN_DIRS[@]}")
+    mapfile -t CHMOD_REAL < <(init_dirs "${CHMOD_DIRS[@]}")
+
+    if [[ ${#CHOWN_REAL[@]} -gt 0 ]]; then
+      chown --preserve-root --silent -R "${CHOWN}" "${CHOWN_REAL[@]}"
+    fi
+
+    if [[ ${#CHMOD_REAL[@]} -gt 0 ]]; then
+      chmod --preserve-root --silent -R u+rwX "${CHMOD_REAL[@]}"
+    fi
   fi
 fi
 
