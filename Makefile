@@ -1251,7 +1251,7 @@ docker-dummy-oidc:
 packer-digitalocean:
 	$(info Building DigitalOcean marketplace image...)
 	(cd ./setup/cloud/digitalocean && packer init digitalocean.pkr.hcl && packer build digitalocean.pkr.hcl)
-lint: lint-js lint-go check-api-request-limits check-make-help
+lint: lint-js lint-go check-api-request-limits check-make-help check-scripts-copy-mode
 lint-js:
 	$(info Linting JS code...)
 	$(MAKE) -C frontend lint
@@ -1264,6 +1264,9 @@ check-api-request-limits:
 check-make-help:
 	$(info Checking that "make help" only advertises existing targets...)
 	bash ./scripts/check-make-help.sh
+check-scripts-copy-mode:
+	$(info Checking that the dist scripts are copied with an explicit owner and mode...)
+	bash ./scripts/check-scripts-copy-mode.sh
 fmt-js:
 	(cd frontend &&	npm run fmt)
 fmt-go:

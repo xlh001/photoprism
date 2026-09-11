@@ -100,9 +100,9 @@ echo "originals path: ${PHOTOPRISM_ORIGINALS_PATH:-default}"
 ret=0
 
 # change to another user and group on request
-if [[ ${INIT_SCRIPT} ]] && [[ $(/usr/bin/id -u) == "0" ]] && [[ ${PHOTOPRISM_UID} =~ $re ]] && [[ ${PHOTOPRISM_UID} != "0" ]]; then
+if [[ ${INIT_SCRIPT} ]] && [[ $(/usr/bin/id -u) == "0" ]] && [[ ${PHOTOPRISM_UID} =~ $re ]] && [[ $((10#${PHOTOPRISM_UID})) != "0" ]]; then
   # check uid and gid env variables
-  if [[ ${PHOTOPRISM_GID} =~ $re ]] && [[ ${PHOTOPRISM_GID} != "0" ]]; then
+  if [[ ${PHOTOPRISM_GID} =~ $re ]] && [[ $((10#${PHOTOPRISM_GID})) != "0" ]]; then
     echo "switching to uid ${PHOTOPRISM_UID}:${PHOTOPRISM_GID}"
     echo "${@}"
 

@@ -92,7 +92,7 @@ case $DOCKER_ENV in
     ;;
 esac
 
-if [[ ${PHOTOPRISM_UID} =~ $re ]] && [[ ${PHOTOPRISM_UID} != "0" ]]; then
+if [[ ${PHOTOPRISM_UID} =~ $re ]] && [[ $((10#${PHOTOPRISM_UID})) != "0" ]]; then
   # Create user account if it does not exist yet (required by /usr/bin/setpriv).
   getent passwd "${PHOTOPRISM_UID}" > /dev/null
   if [ $? -eq 2 ] ; then
@@ -105,7 +105,7 @@ if [[ ${PHOTOPRISM_UID} =~ $re ]] && [[ ${PHOTOPRISM_UID} != "0" ]]; then
     echo "init: account with the user id ${PHOTOPRISM_UID} already exists"
   fi
 
-  if [[ ${PHOTOPRISM_GID} =~ $re ]] && [[ ${PHOTOPRISM_GID} != "0" ]]; then
+  if [[ ${PHOTOPRISM_GID} =~ $re ]] && [[ $((10#${PHOTOPRISM_GID})) != "0" ]]; then
     CHOWN="${PHOTOPRISM_UID}:${PHOTOPRISM_GID}"
   else
     CHOWN="${PHOTOPRISM_UID}"
