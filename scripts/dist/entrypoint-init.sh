@@ -13,6 +13,22 @@ fi
 # so that only the Makefile in INIT_SCRIPTS can provide the init targets.
 unset MAKEFLAGS GNUMAKEFLAGS MAKEFILES MFLAGS
 
+# The apt targets expect a frontend that never prompts, as there is no terminal to prompt on.
+export DEBIAN_FRONTEND="noninteractive"
+
+# Resolve the scripts directory from this file rather than assuming one, as the scripts are
+# also shipped in installation packages that may place them elsewhere.
+INIT_SCRIPTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P)
+INIT_LOCK="${INIT_SCRIPTS}/.init-lock"
+DOCKER_ENV_FILE="${INIT_SCRIPTS}/.docker-env"
+
+# Prefer the environment recorded when the image was built, since it is a property of the
+# image rather than something to be chosen per run. DOCKER_ENV applies only without it,
+# such as when the scripts are installed from a package rather than shipped in an image.
+if [[ -r ${DOCKER_ENV_FILE} ]]; then
+  read -r DOCKER_ENV < "${DOCKER_ENV_FILE}"
+fi
+
 # regular expressions
 re='^[0-9]+$'
 
@@ -45,14 +61,12 @@ init_target() {
 case $DOCKER_ENV in
   prod)
     export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/scripts:/opt/photoprism/bin";
-    INIT_SCRIPTS="/scripts"
     CHOWN_DIRS=("/photoprism/storage")
     CHMOD_DIRS=("/photoprism/storage")
     ;;
 
   develop)
     export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/scripts:/usr/local/go/bin:/go/bin:/opt/photoprism/bin";
-    INIT_SCRIPTS="/scripts"
     CHOWN_DIRS=("/photoprism" "/opt/photoprism" "/go" "/tmp/photoprism")
     CHMOD_DIRS=("/opt/photoprism" "/tmp/photoprism")
     ;;
@@ -106,8 +120,6 @@ if [[ -z ${PHOTOPRISM_INIT} ]]; then
   exit
 fi
 
-INIT_LOCK="/scripts/.init-lock"
-
 # execute targets via /usr/bin/make
 if [[ ! -e ${INIT_LOCK} ]]; then
   for INIT_TARGET in $PHOTOPRISM_INIT; do
@@ -115,5 +127,5 @@ if [[ ! -e ${INIT_LOCK} ]]; then
     init_target "$INIT_TARGET"
   done
 
-  echo 1 >${INIT_LOCK}
+  echo 1 >"${INIT_LOCK}"
 fi
