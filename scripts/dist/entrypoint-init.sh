@@ -50,7 +50,14 @@ init_in_dir() {
     return 0
   fi
 
-  (cd -P "${init_dir}" && [[ $(pwd -P) == "${init_dir}" ]] && "$@")
+  (
+    if ! cd -P "${init_dir}" 2>/dev/null || [[ $(pwd -P) != "${init_dir}" ]]; then
+      echo "init: skipping ${init_dir}" 1>&2
+      exit 0
+    fi
+
+    "$@"
+  )
 }
 
 # init_target runs a single init target from the Makefile in INIT_SCRIPTS.
