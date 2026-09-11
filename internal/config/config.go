@@ -188,7 +188,7 @@ func NewConfig(ctx *cli.Context) *Config {
 	// Override options with values from the "options.yml" file, if it exists.
 	if optionsYaml := c.OptionsYaml(); fs.FileExists(optionsYaml) {
 		if err := c.options.Load(optionsYaml); err != nil {
-			log.Warnf("config: failed loading values from %s (%s)", clean.Log(optionsYaml), err)
+			event.SystemWarn([]string{"config", "options", "load %s", "%s"}, clean.Log(optionsYaml), clean.ErrorFull(err))
 		} else if c.env == EnvDevelop {
 			// Reduce the log level to minimize noise in the test logs.
 			log.Tracef("config: overriding config with values from %s", clean.Log(optionsYaml))

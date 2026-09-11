@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/photoprism/photoprism/internal/ai/face"
+	"github.com/photoprism/photoprism/internal/event"
 	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/fs"
 )
@@ -340,12 +341,12 @@ func NewOptions(ctx *cli.Context) *Options {
 	if c.DefaultsYaml = defaultsYaml(ctx); !fs.FileExistsNotEmpty(c.DefaultsYaml) {
 		log.Tracef("config: defaults file is empty or missing")
 	} else if err := c.Load(c.DefaultsYaml); err != nil {
-		log.Warnf("config: failed loading defaults from %s (%s)", clean.Log(c.DefaultsYaml), err)
+		event.SystemWarn([]string{"config", "defaults", "load %s", "%s"}, clean.Log(c.DefaultsYaml), clean.ErrorFull(err))
 	}
 
 	// Apply options specified with environment variables and command-line flags.
 	if err := c.ApplyCliContext(ctx); err != nil {
-		log.Error(err)
+		log.Errorf("config: %s", clean.Error(err))
 	}
 
 	return c

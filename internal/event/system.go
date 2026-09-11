@@ -28,8 +28,8 @@ func System(level logrus.Level, ev []string, args ...any) {
 		return
 	}
 
-	// Render the complete message (all segments joined) for the event hub so
-	// the frontend log viewer keeps the leading category.
+	// The hub copy keeps the leading category so an operator-facing consumer renders the same
+	// text as the console. No browser consumer receives this channel.
 	message := Format(ev, args...)
 
 	if SystemLog != nil {

@@ -398,7 +398,7 @@ func (c *Config) JoinToken() string {
 	if !c.Portal() {
 		return ""
 	} else if token, _, err := c.SaveJoinToken(""); err != nil {
-		log.Errorf("config: %v", err)
+		event.SystemError([]string{"config", "cluster join token", "%s"}, clean.ErrorFull(err))
 		return ""
 	} else {
 		return token
@@ -629,14 +629,14 @@ func (c *Config) SaveNodeClientSecret(clientSecret string) (fileName string, err
 	if err = fs.MkdirAll(dir); err != nil {
 		// Use memory to store client secret if directory is not writable.
 		c.options.NodeClientSecret = clientSecret
-		return fileName, fmt.Errorf("could not create node secrets path (%s)", err)
+		return fileName, fmt.Errorf("could not create node secrets path (%w)", err)
 	}
 
 	// Write secret to file.
 	if err = fs.WriteFile(fileName, []byte(clientSecret), fs.ModeSecretFile); err != nil {
 		// Use memory to store client secret if file is not writable.
 		c.options.NodeClientSecret = clientSecret
-		return "", fmt.Errorf("could not write node client secret (%s)", err)
+		return "", fmt.Errorf("could not write node client secret (%w)", err)
 	}
 
 	c.options.NodeClientSecret = ""
