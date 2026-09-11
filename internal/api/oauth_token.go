@@ -255,7 +255,7 @@ func OAuthToken(router *gin.RouterGroup) {
 		// Delete any existing client sessions above the configured limit.
 		if client == nil {
 			// Skip deletion if not created by a client.
-		} else if deleted := client.EnforceAuthTokenLimit(); deleted > 0 {
+		} else if deleted := client.EnforceAuthTokenLimit(sess.ID); deleted > 0 {
 			event.AuditInfo([]string{clientIp, "oauth2", actor, action, "deleted %s to enforce token limit"}, english.Plural(deleted, "session", "sessions"))
 		}
 
