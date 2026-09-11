@@ -16,15 +16,15 @@ unset MAKEFLAGS GNUMAKEFLAGS MAKEFILES MFLAGS
 # The apt targets expect a frontend that never prompts, as there is no terminal to prompt on.
 export DEBIAN_FRONTEND="noninteractive"
 
-# Resolve the scripts directory from this file rather than assuming one, as the scripts are
-# also shipped in installation packages that may place them elsewhere.
+# Resolve the scripts directory from this file, so that the lock and the environment file
+# stay beside it wherever the scripts are installed.
 INIT_SCRIPTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P)
 INIT_LOCK="${INIT_SCRIPTS}/.init-lock"
 DOCKER_ENV_FILE="${INIT_SCRIPTS}/.docker-env"
 
 # Prefer the environment recorded when the image was built, since it is a property of the
 # image rather than something to be chosen per run. DOCKER_ENV applies only without it,
-# such as when the scripts are installed from a package rather than shipped in an image.
+# such as when this script is run directly from a source checkout.
 if [[ -r ${DOCKER_ENV_FILE} ]]; then
   read -r DOCKER_ENV < "${DOCKER_ENV_FILE}"
 fi
@@ -33,8 +33,8 @@ fi
 re='^[0-9]+$'
 
 # init_dirs prints the entries of the given list that are real directories.
-# An entry that has been replaced by a symlink is skipped, as chown and chmod
-# follow a symlink given as an argument and would change its target instead.
+# Entries that are missing or are symlinks are skipped, since chown and chmod
+# dereference a symlink given as an argument.
 init_dirs() {
   local init_dir
 
