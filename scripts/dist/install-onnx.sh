@@ -49,7 +49,10 @@ fi
 
 DESTDIR=$(realpath "${DESTDIR_ARG}")
 
-if [[ $(id -u) != 0 ]] && { [[ "${DESTDIR}" == "/usr" ]] || [[ "${DESTDIR}" == "/usr/local" ]]; }; then
+# Test the destination rather than compare it against a list of system directories, so that an
+# install into a root-owned prefix such as the package layout reports the reason it cannot write
+# instead of failing later in the extract.
+if [[ $(id -u) != 0 ]] && [[ ! -w "${DESTDIR}" ]]; then
   echo "Error: Run ${0##*/} as root to install in '${DESTDIR}'." >&2
   exit 1
 fi
