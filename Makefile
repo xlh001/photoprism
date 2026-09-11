@@ -522,6 +522,23 @@ claude-skills:
 	else \
 	  echo "No specs/.claude/output-styles directory found, skipping."; \
 	fi
+	@if [ -d "specs/.claude/scripts" ]; then \
+	  echo "Linking Claude Code scripts from specs/.claude/scripts..."; \
+	  install -d -m 755 -- ".claude/scripts"; \
+	  for src in specs/.claude/scripts/*; do \
+	    [ -f "$$src" ] || continue; \
+	    name=$$(basename "$$src"); \
+	    link=".claude/scripts/$$name"; \
+	    target="../../specs/.claude/scripts/$$name"; \
+	    if [ -L "$$link" ] || [ ! -e "$$link" ]; then \
+	      ln -sfn "$$target" "$$link"; \
+	    else \
+	      echo "WARNING: $$link exists and is not a symlink, skipping"; \
+	    fi; \
+	  done; \
+	else \
+	  echo "No specs/.claude/scripts directory found, skipping."; \
+	fi
 dep-go:
 	go build -v ./...
 dep-upgrade:
