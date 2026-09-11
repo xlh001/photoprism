@@ -156,7 +156,7 @@ func UploadUserFiles(router *gin.RouterGroup) {
 				return
 			} else {
 				log.Debugf("upload: saved %s in user upload path", clean.Log(baseName))
-				event.Publish("upload.saved", event.Data{"uid": s.UserUID, "file": baseName})
+				event.Publish("upload.saved", event.Data{"uid": s.UserUID})
 			}
 
 			// Extract contents if the uploaded file is an archive.
@@ -375,15 +375,15 @@ func ProcessUserUpload(router *gin.RouterGroup) {
 		// Delete empty import directory.
 		if fs.DirIsEmpty(uploadPath) {
 			if err = os.Remove(uploadPath); err != nil {
-				log.Errorf("upload: failed to delete empty folder %s (%s)", clean.Log(uploadPath), clean.Error(err))
+				event.SystemError([]string{"upload", "delete empty folder %s", "%s"}, clean.Log(uploadPath), clean.ErrorFull(err))
 			} else {
-				log.Infof("upload: deleted empty folder %s", clean.Log(uploadPath))
+				event.SystemInfo([]string{"upload", "deleted empty folder %s"}, clean.Log(uploadPath))
 			}
 		}
 
 		// Update moments if files have been imported.
 		if n := imported.Processed(); n == 0 {
-			log.Infof("upload: found no new files to import from %s", clean.Log(uploadPath))
+			event.SystemInfo([]string{"upload", "found no new files in %s"}, clean.Log(uploadPath))
 		} else {
 			log.Infof("upload: imported %s", english.Plural(n, "file", "files"))
 			if moments := get.Moments(); moments == nil {
@@ -397,9 +397,7 @@ func ProcessUserUpload(router *gin.RouterGroup) {
 
 		// Show success message.
 		event.SuccessMsg(i18n.MsgUploadProcessed)
-		event.Publish("import.completed", event.Data{"uid": opt.UID, "path": uploadPath, "seconds": elapsed})
-		event.Publish("index.completed", event.Data{"uid": opt.UID, "path": uploadPath, "seconds": elapsed})
-		event.Publish("upload.completed", event.Data{"uid": opt.UID, "path": uploadPath, "seconds": elapsed})
+		event.PublishCompleted([]string{"import.completed", "index.completed", "upload.completed"}, opt.UID, "", elapsed)
 
 		// Update album YAML backups and notify clients of the changes.
 		for _, album := range opt.Albums {

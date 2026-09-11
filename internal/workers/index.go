@@ -50,8 +50,6 @@ func (w *Index) Start() (err error) {
 
 	start := time.Now()
 
-	path := conf.OriginalsPath()
-
 	ind := get.Index()
 
 	convert := settings.Index.Convert && conf.SidecarWritable()
@@ -95,14 +93,7 @@ func (w *Index) Start() (err error) {
 
 	event.SuccessMsg(i18n.MsgIndexingCompletedIn, elapsed)
 
-	eventData := event.Data{
-		"uid":     indOpt.UID,
-		"action":  indOpt.Action,
-		"path":    path,
-		"seconds": elapsed,
-	}
-
-	event.Publish("index.completed", eventData)
+	event.PublishCompleted([]string{"index.completed"}, indOpt.UID, indOpt.Action, elapsed)
 
 	return nil
 }

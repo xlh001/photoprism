@@ -93,15 +93,7 @@ func Import() error {
 
 	event.SuccessMsg(i18n.MsgImportCompletedIn, elapsed)
 
-	eventData := event.Data{
-		"uid":     opt.UID,
-		"action":  opt.Action,
-		"path":    path,
-		"seconds": elapsed,
-	}
-
-	event.Publish("import.completed", eventData)
-	event.Publish("index.completed", eventData)
+	event.PublishCompleted([]string{"import.completed", "index.completed"}, opt.UID, opt.Action, elapsed)
 
 	api.UpdateClientConfig()
 

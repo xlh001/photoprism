@@ -81,7 +81,6 @@ func StartIndexing(router *gin.RouterGroup) {
 		}
 
 		// Configure index options.
-		path := conf.OriginalsPath()
 		convert := settings.Index.Convert && conf.SidecarWritable()
 		skipArchived := settings.Index.SkipArchived
 
@@ -190,12 +189,7 @@ func StartIndexing(router *gin.RouterGroup) {
 			event.SuccessMsg(i18n.MsgIndexingCompletedIn, elapsed)
 		}
 
-		event.Publish("index.completed", event.Data{
-			"uid":     indOpt.UID,
-			"action":  indOpt.Action,
-			"path":    path,
-			"seconds": elapsed,
-		})
+		event.PublishCompleted([]string{"index.completed"}, indOpt.UID, indOpt.Action, elapsed)
 
 		UpdateClientConfig()
 

@@ -141,15 +141,15 @@ func StartImport(router *gin.RouterGroup) {
 		// Delete empty import directory.
 		if srcFolder != "" && importPath != conf.ImportPath() && fs.DirIsEmpty(importPath) {
 			if err := os.Remove(importPath); err != nil {
-				log.Errorf("import: failed to delete empty folder %s (%s)", clean.Log(importPath), clean.Error(err))
+				log.Errorf("import: failed to delete empty folder %s (%s)", clean.Log(srcFolder), clean.Error(err))
 			} else {
-				log.Infof("import: deleted empty folder %s", clean.Log(importPath))
+				log.Infof("import: deleted empty folder %s", clean.Log(srcFolder))
 			}
 		}
 
 		// Update moments if files have been imported.
 		if n := len(imported); n == 0 {
-			log.Infof("import: found no new files to import from %s", clean.Log(importPath))
+			log.Infof("import: found no new files to import from %s", clean.Log(srcFolder))
 		} else {
 			log.Infof("import: imported %s", english.Plural(n, "file", "files"))
 			if moments := get.Moments(); moments == nil {
@@ -164,15 +164,7 @@ func StartImport(router *gin.RouterGroup) {
 		// Show success message.
 		event.SuccessMsg(i18n.MsgImportCompletedIn, elapsed)
 
-		eventData := event.Data{
-			"uid":     opt.UID,
-			"action":  opt.Action,
-			"path":    importPath,
-			"seconds": elapsed,
-		}
-
-		event.Publish("import.completed", eventData)
-		event.Publish("index.completed", eventData)
+		event.PublishCompleted([]string{"import.completed", "index.completed"}, opt.UID, opt.Action, elapsed)
 
 		for _, uid := range frm.Albums {
 			PublishAlbumEvent(StatusUpdated, uid)

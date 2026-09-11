@@ -67,3 +67,18 @@ func InfoMsg(id i18n.Message, params ...any) {
 func WarnMsg(id i18n.Message, params ...any) {
 	publishMsg(logrus.WarnLevel, "notify.warning", id, params...)
 }
+
+// PublishCompleted notifies subscribed clients that an index, import or upload run has finished.
+// It carries no path: every consumer treats these as "something changed, refresh", and topic
+// routing delivers them to every session allowed to subscribe rather than to the one that acted.
+func PublishCompleted(topics []string, uid, action string, elapsed int) {
+	data := Data{"uid": uid, "seconds": elapsed}
+
+	if action != "" {
+		data["action"] = action
+	}
+
+	for _, topic := range topics {
+		Publish(topic, data)
+	}
+}
