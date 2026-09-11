@@ -26,6 +26,57 @@ DESTDIR=$(realpath "${1:-/usr/local}")
 # In addition, you can specify a custom version to be installed as the second argument.
 LIBHEIF_VERSION=${2:-v1.23.4}
 
+# A private staging directory this script owns.
+if ! STAGING_DIR="$(mktemp -d "${TMPDIR:-/tmp}/photoprism-libheif.XXXXXXXX")"; then
+  echo "❌ Cannot create a staging directory in \"${TMPDIR:-/tmp}\"."
+  exit 1
+fi
+
+# STUB_DIR is set later, by the branch that builds a replacement package. One handler owns both,
+# because an EXIT trap replaces the previous one rather than stacking with it.
+STUB_DIR=""
+
+cleanup() {
+  [[ -n ${STAGING_DIR} ]] && rm -rf "${STAGING_DIR}"
+  [[ -n ${STUB_DIR} ]] && rm -rf "${STUB_DIR}"
+  return 0
+}
+
+trap cleanup EXIT
+
+# verify_artifact checks a staged download against its published SHA-256 checksum.
+#
+# Artifacts are served with a ".sha256" companion where one has been published; a checksum that
+# exists must match, and one that is served but malformed is refused rather than ignored.
+verify_artifact() {
+  local file="$1" url="$2" sums="$1.sha256" expected actual
+
+  if ! curl -fsSL "${url}.sha256" -o "${sums}" 2> /dev/null; then
+    echo "⚠️ No published checksum for \"${url}\"; installing unverified."
+    return 0
+  fi
+
+  expected=$(awk '{print $1; exit}' "${sums}")
+
+  if [[ ! ${expected} =~ ^[0-9a-fA-F]{64}$ ]]; then
+    echo "❌ Published checksum for \"${url}\" is not a SHA-256 digest."
+    return 1
+  fi
+
+  if command -v sha256sum > /dev/null 2>&1; then
+    actual=$(sha256sum "${file}" | awk '{print $1}')
+  else
+    actual=$(shasum -a 256 "${file}" | awk '{print $1}')
+  fi
+
+  if [[ ${expected} != "${actual}" ]]; then
+    echo "❌ Checksum mismatch for \"${url}\"."
+    return 1
+  fi
+
+  echo "✅ Checksum OK (${actual})."
+}
+
 # Determine target architecture.
 if [[ $PHOTOPRISM_ARCH ]]; then
   SYSTEM_ARCH=$PHOTOPRISM_ARCH
@@ -81,7 +132,7 @@ echo "Installing libheif..."
 if [[ $VERSION_CODENAME == "resolute" ]] && [[ $DESTDIR == "/usr" || $DESTDIR == "/usr/local" ]] && command -v apt-get > /dev/null; then
   ARCHIVE="libheif-${VERSION_CODENAME}-${DESTARCH}-${LIBHEIF_VERSION}.deb"
   URL="https://dl.photoprism.app/dist/libheif/${ARCHIVE}"
-  TMPDEB="/tmp/${ARCHIVE}"
+  TMPDEB="${STAGING_DIR}/${ARCHIVE}"
 
   echo "--------------------------------------------------------------------------------"
   echo "VERSION: $LIBHEIF_VERSION"
@@ -92,6 +143,16 @@ if [[ $VERSION_CODENAME == "resolute" ]] && [[ $DESTDIR == "/usr" || $DESTDIR ==
     echo "❌ Failed to download \"$URL\"."
     exit 1
   fi
+
+  if ! verify_artifact "$TMPDEB" "$URL"; then
+    exit 1
+  fi
+
+  # apt reads the package as an unprivileged user and warns when it cannot. The staging
+  # directory's name is unpredictable, which is what keeps it from being pre-planted; the
+  # contents are a signed-by-checksum package rather than a secret.
+  chmod 0755 "$STAGING_DIR"
+  chmod 0644 "$TMPDEB"
 
   # photoprism-libheif is apt-mark held after install, so an explicit version bump
   # must pass --allow-change-held-packages or apt refuses to upgrade the held package.
@@ -117,12 +178,42 @@ echo "ARCHIVE: $ARCHIVE"
 echo "DESTDIR: $DESTDIR"
 echo "--------------------------------------------------------------------------------"
 
-if curl -fsSL "$URL" | tar --overwrite --mode=755 -xz -C "$DESTDIR" 2> /dev/null; then
-  echo "✅ Extracted \"$URL\" to \"$DESTDIR\""
-else
+TMPTAR="${STAGING_DIR}/${ARCHIVE}"
+
+# Staged before it is unpacked, so that a transfer which stops partway cannot leave half an
+# archive written over DESTDIR, and so the archive can be checked while it is still a file.
+#
+# A 404 means this platform has no published build, which is not an error: the image goes on
+# without libheif. Every other outcome - a name that does not resolve, a refused connection, a
+# TLS failure, a proxy error, a truncated transfer, a full disk - is a failure, and reporting it
+# as "not available here" would publish an image that silently lacks HEIC support.
+HTTP_STATUS=$(curl -sSL -w '%{http_code}' -o "$TMPTAR" "$URL" 2> /dev/null || echo "000")
+
+if [[ $HTTP_STATUS == "404" ]]; then
   echo "❌ No libheif binaries are available for this architecture or distribution."
   exit 0
+elif [[ $HTTP_STATUS != "200" ]]; then
+  echo "❌ Failed to download \"$URL\" (HTTP $HTTP_STATUS)."
+  exit 1
 fi
+
+if ! verify_artifact "$TMPTAR" "$URL"; then
+  exit 1
+fi
+
+# Readable before writable: a listing failure means the archive is damaged, which is a failure
+# rather than the "nothing published for this platform" case handled above.
+if ! tar -tzf "$TMPTAR" > /dev/null 2>&1; then
+  echo "❌ Downloaded \"$URL\" is not a readable archive."
+  exit 1
+fi
+
+if ! tar --overwrite --mode=755 -xzf "$TMPTAR" -C "$DESTDIR"; then
+  echo "❌ Failed to extract \"$URL\" to \"$DESTDIR\"."
+  exit 1
+fi
+
+echo "✅ Extracted \"$URL\" to \"$DESTDIR\""
 
 if [[ $DESTDIR == "/usr" || $DESTDIR == "/usr/local" ]]; then
   echo "Running \"ldconfig\"..."
@@ -145,7 +236,6 @@ if [[ $DESTDIR == "/usr" || $DESTDIR == "/usr/local" ]] && command -v apt-get > 
     STUB_VERSION="${UPSTREAM_VERSION}-photoprism1"
     STUB_ARCH=$(dpkg --print-architecture)
     STUB_DIR=$(mktemp -d)
-    trap 'rm -rf "$STUB_DIR"' EXIT
 
     # Build comma-separated Provides:/Replaces:/Conflicts: from the actually-installed
     # set, so per-distro naming (libheif1 vs libheif1t64, plugin variants) is handled
@@ -202,7 +292,6 @@ STUBEOF
     fi
 
     rm -rf "$STUB_DIR"
-    trap - EXIT
   fi
 fi
 
