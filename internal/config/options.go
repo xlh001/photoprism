@@ -230,6 +230,8 @@ type Options struct {
 	FFmpegMapVideo            string        `yaml:"FFmpegMapVideo" json:"FFmpegMapVideo" flag:"ffmpeg-map-video"`
 	FFmpegMapAudio            string        `yaml:"FFmpegMapAudio" json:"FFmpegMapAudio" flag:"ffmpeg-map-audio"`
 	FFmpegExclude             string        `yaml:"FFmpegExclude" json:"-" flag:"ffmpeg-exclude"`
+	ConvertTimeout            int           `yaml:"ConvertTimeout" json:"-" flag:"convert-timeout"`
+	TranscodeTimeout          int           `yaml:"TranscodeTimeout" json:"-" flag:"transcode-timeout"`
 	ExifToolBin               string        `yaml:"ExifToolBin" json:"-" flag:"exiftool-bin"`
 	SipsBin                   string        `yaml:"SipsBin" json:"-" flag:"sips-bin"`
 	SipsExclude               string        `yaml:"SipsExclude" json:"-" flag:"sips-exclude"`

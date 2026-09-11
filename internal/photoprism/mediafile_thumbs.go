@@ -2,7 +2,6 @@ package photoprism
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"image"
 	"os/exec"
@@ -17,6 +16,7 @@ import (
 	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/fs"
 	"github.com/photoprism/photoprism/pkg/fs/disk"
+	"github.com/photoprism/photoprism/pkg/proc"
 )
 
 // Bounds returns the media dimensions as image.Rectangle.
@@ -261,12 +261,14 @@ func (m *MediaFile) ChangeOrientation(val int) (err error) {
 	log.Trace(cmd.String())
 
 	// Run exiftool command.
-	if err = cmd.Run(); err != nil {
-		if stderr.String() != "" {
-			return errors.New(stderr.String())
-		} else {
-			return err
+	if err = proc.Run(cmd, cnf.ConvertTimeout()); err != nil {
+		if s := stderr.String(); s != "" {
+			err = fmt.Errorf("%w: %s", err, s)
 		}
+
+		LogConvertError(err, cmd, clean.Log(m.BaseName()))
+
+		return err
 	}
 
 	return nil

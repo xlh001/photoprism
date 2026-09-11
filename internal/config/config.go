@@ -407,6 +407,10 @@ func (c *Config) Propagate() {
 	FlushCache()
 	log.SetLevel(c.LogLevel())
 
+	// Give the decoders a ceiling derived from the configured resolution limit, with headroom,
+	// so that raising the limit raises it and disabling it disables the check.
+	fs.MaxImagePixels = DecodeLimitPixels(c.ResolutionLimit())
+
 	// Configure thumbnail package.
 	thumb.Library = c.ThumbLibrary()
 	thumb.Color = c.ThumbColor()

@@ -2,7 +2,6 @@ package photoprism
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -19,6 +18,7 @@ import (
 	"github.com/photoprism/photoprism/pkg/fs/disk"
 	"github.com/photoprism/photoprism/pkg/log/status"
 	"github.com/photoprism/photoprism/pkg/media/projection"
+	"github.com/photoprism/photoprism/pkg/proc"
 )
 
 // ToAvc converts a single video file to MPEG-4 AVC.
@@ -62,7 +62,7 @@ func (w *Convert) ToAvc(f *MediaFile, encoder encode.Encoder, noMutex, force boo
 		if f.IsM2TS() && w.conf.SidecarWritable() && !w.conf.InsufficientStorage() {
 			if mp4Name, mp4Err := fs.FileName(f.FileName(), w.conf.SidecarPath(), w.conf.OriginalsPath(), fs.ExtMp4); mp4Err != nil {
 				return nil, fmt.Errorf("convert: %s in %s (remux)", mp4Err, clean.Log(f.RootRelName()))
-			} else if mp4Err = ffmpeg.RemuxFile(f.FileName(), mp4Name, encode.NewRemuxOptions(conf.FFmpegBin(), fs.VideoMp4, false)); mp4Err != nil {
+			} else if mp4Err = ffmpeg.RemuxFile(f.FileName(), mp4Name, w.RemuxOptions(fs.VideoMp4, false)); mp4Err != nil {
 				return nil, fmt.Errorf("convert: %s in %s (remux)", mp4Err, clean.Log(f.RootRelName()))
 			} else if mp4File, fileErr := NewMediaFile(mp4Name); mp4File == nil || fileErr != nil {
 				log.Warnf("convert: %s could not be converted to mp4", logFileName)
@@ -155,11 +155,19 @@ func (w *Convert) ToAvc(f *MediaFile, encoder encode.Encoder, noMutex, force boo
 	// Log exact command for debugging in trace mode.
 	log.Trace(cmd.String())
 
-	// Transcode source media file to AVC.
+	// Transcode source media file to AVC. Transcoding time tracks the length of the source, so
+	// it has a budget of its own, which is unset by default. An animated image is converted
+	// rather than transcoded, so it is charged the conversion budget instead.
+	budget := w.conf.TranscodeTimeout()
+
+	if cmd.Path == w.conf.ImageMagickBin() {
+		budget = w.conf.ConvertTimeout()
+	}
+
 	start := time.Now()
-	if err = cmd.Run(); err != nil {
-		if stderr.String() != "" {
-			err = errors.New(stderr.String())
+	if err = proc.Run(cmd, budget); err != nil {
+		if s := stderr.String(); s != "" {
+			err = fmt.Errorf("%w: %s", err, s)
 		}
 
 		// Log ffmpeg output for debugging.

@@ -1159,6 +1159,18 @@ var Flags = CliFlags{
 			Value:   ffmpeg.DefaultExclude,
 			EnvVars: EnvVars("FFMPEG_EXCLUDE", "FFMPEG_BLACKLIST"),
 		}}, {
+		Flag: &cli.IntFlag{
+			Name:    "convert-timeout",
+			Usage:   "time in `MINUTES` after which converting a still image, document, or RAW file is given up (-1 to disable)",
+			Value:   DefaultConvertTimeout,
+			EnvVars: EnvVars("CONVERT_TIMEOUT"),
+		}}, {
+		Flag: &cli.IntFlag{
+			Name:    "transcode-timeout",
+			Usage:   "time in `MINUTES` after which transcoding a video is given up (disabled by default)",
+			Value:   DefaultTranscodeTimeout,
+			EnvVars: EnvVars("TRANSCODE_TIMEOUT"),
+		}}, {
 		Flag: &cli.StringFlag{
 			Name:    "exiftool-bin",
 			Usage:   "ExifTool `COMMAND` for extracting metadata",

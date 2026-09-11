@@ -303,6 +303,8 @@ func (c *Config) Report() (rows [][]string, cols []string) {
 		{"ffmpeg-map-video", c.FFmpegMapVideo()},
 		{"ffmpeg-map-audio", c.FFmpegMapAudio()},
 		{"ffmpeg-exclude", c.FFmpegExclude().String()},
+		{"convert-timeout", fmt.Sprintf("%d", c.options.ConvertTimeout)},
+		{"transcode-timeout", fmt.Sprintf("%d", c.options.TranscodeTimeout)},
 		{"exiftool-bin", c.ExifToolBin()},
 		{"sips-bin", c.SipsBin()},
 		{"sips-exclude", c.SipsExclude()},
