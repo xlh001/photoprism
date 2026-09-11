@@ -11,6 +11,8 @@ re='^[0-9]+$'
 export PHOTOPRISM_ARCH=${PHOTOPRISM_ARCH:-arch}
 export DOCKER_TAG=${DOCKER_TAG:-unknown}
 
+export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/scripts"
+
 # Take the environment and the image name from the file recorded when the image was built,
 # since both are properties of the image rather than something to be chosen per run. Cleared
 # first so an inherited value cannot survive a missing file, and parsed rather than sourced,
@@ -26,7 +28,6 @@ fi
 
 export DOCKER_ENV=${DOCKER_ENV:-unknown}
 export DOCKER_IMG=${DOCKER_IMG:-unknown}
-export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/scripts"
 
 # detect environment
 case $DOCKER_ENV in

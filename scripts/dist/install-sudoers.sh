@@ -68,7 +68,6 @@ require_root_owned "${SCRIPTS_DIR}/entrypoint-init.sh"
 
 INIT_SCRIPT="${SCRIPTS_DIR}/entrypoint-init.sh"
 SUDOERS_FILE="/etc/sudoers.d/init"
-SUDOERS_TMP=$(mktemp)
 
 # Records what the image is, so that the startup scripts do not have to take it from the caller.
 # Written here because this is where the two image families differ.
@@ -106,11 +105,14 @@ esac
 # its input, such as the variables GNU make accepts options and additional makefiles through.
 # The proxy variables are included because the init targets download packages and models,
 # and nothing else supplies them.
-# DOCKER_ENV stays only as a fallback; the init script prefers the file above, so the
-# variable applies only where that file is absent.
+# DOCKER_ENV is inert on this list: every reader clears it before consulting the recorded
+# file, so a caller's value is never read. It is kept for one rebuild cycle, and the probe
+# list in the container init matrix has to be narrowed with it.
 INIT_ENV="DOCKER_ENV TF_VERSION ONNX_GPU ONNX_VERSION \
 http_proxy https_proxy ftp_proxy all_proxy no_proxy HTTP_PROXY HTTPS_PROXY FTP_PROXY ALL_PROXY NO_PROXY \
 PHOTOPRISM_*"
+
+SUDOERS_TMP=$(mktemp)
 
 if [[ ${DEVELOP} == 1 ]]; then
   # Development images allow every target and script to be run with sudo.
@@ -134,6 +136,12 @@ visudo -c -f "${SUDOERS_TMP}"
 
 install -m 0440 -o root -g root "${SUDOERS_TMP}" "${SUDOERS_FILE}"
 rm -f "${SUDOERS_TMP}"
+
+# The readers follow this path at every start, so it must not be something else in disguise.
+if [[ -L ${IMAGE_ENV_FILE} ]]; then
+  echo "Error: '${IMAGE_ENV_FILE}' must not be a symlink." 1>&2
+  exit 1
+fi
 
 printf '%s\n' \
   "DOCKER_ENV=${DOCKER_ENV_NAME}" \

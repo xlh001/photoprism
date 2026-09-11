@@ -25,6 +25,13 @@ MODE_PATTERN='--chmod=0?755([[:space:]]|$)'
 # neighboring directory whose name merely starts with "/scripts" does not satisfy it.
 NORMALIZE_PATTERN='(/scripts/cleanup\.sh([[:space:]]|$)|chmod[[:space:]]+-R[[:space:]]+go-w[[:space:]]+/scripts([[:space:]]|/|$))'
 
+# A step that records what the image is, which the startup scripts read instead of taking it
+# from the caller: either the installer, which validates the name itself, or the file written
+# out. The values are matched here so that the images writing it directly are held to the same
+# set the installer enforces - a typo would otherwise resolve to "unknown" at runtime, which
+# skips the init script and the privilege drop with it.
+IDENTITY_PATTERN='(/scripts/install-sudoers\.sh([[:space:]]|$)|DOCKER_ENV=(prod|develop)\\nDOCKER_IMG=(develop|ce|plus|pro|portal)\\n.*>[[:space:]]*/scripts/\.env([[:space:]]|$))'
+
 if [[ $# -gt 0 ]]; then
   DOCKERFILES=("$@")
 
@@ -77,6 +84,13 @@ for dockerfile in "${DOCKERFILES[@]}"; do
     if ! grep -qE "${NORMALIZE_PATTERN}" <<< "${stage_tail}"; then
       echo "${dockerfile}:${line_no}: copies the dist scripts without normalizing their mode afterwards" 1>&2
       echo "${dockerfile}:${line_no}: run /scripts/cleanup.sh, or 'chmod -R go-w /scripts', later in the same stage" 1>&2
+      FAILED=$((FAILED + 1))
+    fi
+
+    if ! grep -qE "${IDENTITY_PATTERN}" <<< "${stage_tail}"; then
+      echo "${dockerfile}:${line_no}: copies the dist scripts without recording the image identity" 1>&2
+      echo "${dockerfile}:${line_no}: run /scripts/install-sudoers.sh, or write /scripts/.env with" 1>&2
+      echo "${dockerfile}:${line_no}: DOCKER_ENV=prod|develop and DOCKER_IMG=develop|ce|plus|pro|portal" 1>&2
       FAILED=$((FAILED + 1))
     fi
   done < <(grep -nEi "${COPY_PATTERN}" "${dockerfile}" || true)

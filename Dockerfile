@@ -30,6 +30,10 @@ COPY . .
 # Update scripts in image.
 COPY --chown=root:root --chmod=755 ./scripts/dist/ /scripts/
 
+# Record the image, which the scripts copied above read at startup. Stated here rather than
+# inherited, so that the copy does not install readers onto a base that predates the file.
+RUN printf 'DOCKER_ENV=develop\nDOCKER_IMG=develop\n' > /scripts/.env && chmod 0444 /scripts/.env
+
 # Normalize the mode of the installed scripts. This copy lands after the base image ran
 # "cleanup.sh", so it repeats what that script does at the end of every build.
 RUN chmod -R go-w /scripts
