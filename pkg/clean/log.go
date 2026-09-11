@@ -49,17 +49,22 @@ func Log(s string) string {
 	}
 
 	spaces := false
+	dropped := false
 
 	// Remove non-printable and other potentially problematic characters.
 	s = strings.Map(func(r rune) rune {
-		if r < 32 || r == 127 {
+		switch {
+		case r == ' ' || unsafeSpaceRune(r):
+			spaces = true
+			return unsafeSpace
+		case unsafeDropRune(r):
+			dropped = true
 			return -1
+		case unsafeRune(r):
+			return unsafeMarker
 		}
 
 		switch r {
-		case ' ':
-			spaces = true
-			return r
 		case '`':
 			return '\''
 		case '"':
@@ -71,6 +76,16 @@ func Log(s string) string {
 		}
 	}, s)
 
+	// Callers index the first byte, and a value of only dropped characters empties here.
+	if s == "" {
+		return "''"
+	}
+
+	// Dropping a character joins what it separated, so re-check what the guard refused.
+	if dropped && reject(s, LengthLimit) {
+		return "?"
+	}
+
 	// Contains spaces?
 	if spaces {
 		return fmt.Sprintf("'%s'", s)
@@ -81,7 +96,9 @@ func Log(s string) string {
 
 // LogQuote sanitizes a string and puts it in single quotes for logging.
 func LogQuote(s string) string {
-	if s = Log(s); s[0] != '\'' {
+	if s = Log(s); s == "" {
+		return "''"
+	} else if s[0] != '\'' {
 		return fmt.Sprintf("'%s'", s)
 	} else {
 		return s

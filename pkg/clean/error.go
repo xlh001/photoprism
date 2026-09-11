@@ -69,9 +69,14 @@ func errorText(s string) string {
 	}
 
 	// Remove non-printable and other potentially problematic characters.
-	return strings.Map(func(r rune) rune {
-		if r < 32 || r == 127 {
+	s = strings.Map(func(r rune) rune {
+		switch {
+		case unsafeSpaceRune(r):
+			return unsafeSpace
+		case unsafeDropRune(r):
 			return -1
+		case unsafeRune(r):
+			return unsafeMarker
 		}
 
 		switch r {
@@ -83,6 +88,13 @@ func errorText(s string) string {
 			return r
 		}
 	}, s)
+
+	// A message of only dropped characters empties here, leaving a failure with no cause.
+	if strings.TrimSpace(s) == "" {
+		return "unknown error"
+	}
+
+	return s
 }
 
 // errorLocation reports whether a value names a location rather than a bare name. Replacement
