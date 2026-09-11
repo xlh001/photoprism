@@ -1,10 +1,14 @@
 package thumb
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"image"
 	"image/color"
 	"image/gif"
+	"image/jpeg"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -166,4 +170,93 @@ func writeAnimatedGif(t *testing.T, frames int) string {
 	require.NoError(t, f.Close())
 
 	return name
+}
+
+// oversizedJpegHeader returns a JPEG whose SOF0 declares the given geometry while carrying almost
+// no scan data, which is the shape a geometry check exists to reject before a decoder sizes its
+// buffer from the declaration.
+func oversizedJpegHeader(t *testing.T, width, height uint16) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	require.NoError(t, jpeg.Encode(&buf, image.NewGray(image.Rect(0, 0, 8, 8)), nil))
+	data := buf.Bytes()
+
+	// Patch the SOF0 height and width, which follow the marker, the segment length and the
+	// sample precision.
+	sof := bytes.Index(data, []byte{0xff, 0xc0})
+	require.Greater(t, sof, 0, "the encoder must emit a baseline SOF0 marker")
+
+	binary.BigEndian.PutUint16(data[sof+5:], height)
+	binary.BigEndian.PutUint16(data[sof+7:], width)
+
+	return data
+}
+
+func TestCheckJpegPixels(t *testing.T) {
+	max := fs.MaxImagePixels
+	defer func() { fs.MaxImagePixels = max }()
+
+	t.Run("WithinBudget", func(t *testing.T) {
+		fs.MaxImagePixels = max
+		f, err := os.Open("testdata/example.jpg")
+		require.NoError(t, err)
+		defer f.Close()
+		assert.NoError(t, checkJpegPixels(f, "example.jpg"))
+	})
+	t.Run("AboveBudget", func(t *testing.T) {
+		fs.MaxImagePixels = 4
+		f, err := os.Open("testdata/example.jpg")
+		require.NoError(t, err)
+		defer f.Close()
+		assert.ErrorIs(t, checkJpegPixels(f, "example.jpg"), fs.ErrImageTooLarge)
+	})
+	t.Run("DeclaredGeometryDecidesIt", func(t *testing.T) {
+		// The declaration is what a decoder allocates from, so a small file declaring a large
+		// frame has to be refused on the declaration rather than on its length.
+		fs.MaxImagePixels = 150000000
+		data := oversizedJpegHeader(t, 20000, 20000)
+		assert.Less(t, len(data), 2048, "the fixture must stay far smaller than what it declares")
+		assert.ErrorIs(t, checkJpegPixels(bytes.NewReader(data), "crafted.jpg"), fs.ErrImageTooLarge)
+	})
+	t.Run("LeavesTheReaderAtTheStart", func(t *testing.T) {
+		// decodeImage reads the same reader afterwards, so the guard must not consume it.
+		fs.MaxImagePixels = max
+		f, err := os.Open("testdata/example.jpg")
+		require.NoError(t, err)
+		defer f.Close()
+		require.NoError(t, checkJpegPixels(f, "example.jpg"))
+		pos, err := f.Seek(0, io.SeekCurrent)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), pos)
+	})
+	t.Run("UnreadableHeaderIsLeftToTheDecoder", func(t *testing.T) {
+		fs.MaxImagePixels = 4
+		assert.NoError(t, checkJpegPixels(bytes.NewReader([]byte("not a jpeg at all")), "junk.jpg"))
+	})
+	t.Run("Disabled", func(t *testing.T) {
+		fs.MaxImagePixels = 0
+		data := oversizedJpegHeader(t, 20000, 20000)
+		assert.NoError(t, checkJpegPixels(bytes.NewReader(data), "crafted.jpg"))
+	})
+}
+
+func TestOpenJpeg_PixelBudget(t *testing.T) {
+	max := fs.MaxImagePixels
+	defer func() { fs.MaxImagePixels = max }()
+
+	t.Run("WithinBudget", func(t *testing.T) {
+		fs.MaxImagePixels = max
+		img, err := OpenJpeg("testdata/example.jpg", 1)
+		assert.NoError(t, err)
+		assert.NotNil(t, img)
+	})
+	t.Run("AboveBudget", func(t *testing.T) {
+		// OpenJpeg is reached only when the color path is active, which the current
+		// configuration never selects, so this is what keeps the guard from rotting.
+		fs.MaxImagePixels = 4
+		img, err := OpenJpeg("testdata/example.jpg", 1)
+		assert.ErrorIs(t, err, fs.ErrImageTooLarge)
+		assert.Nil(t, img)
+	})
 }

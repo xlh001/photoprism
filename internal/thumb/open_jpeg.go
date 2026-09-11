@@ -72,7 +72,7 @@ func OpenJpeg(fileName string, orientation int) (image.Image, error) {
 
 	// Ok?
 	if err != nil {
-		return nil, fmt.Errorf("%s while decoding", err)
+		return nil, fmt.Errorf("%w while decoding", err)
 	}
 
 	// Read ICC profile and convert colors if possible.
