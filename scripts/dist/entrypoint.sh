@@ -20,8 +20,8 @@ DOCKER_ENV=""
 DOCKER_IMG=""
 
 if [[ -r ${IMAGE_ENV_FILE} ]]; then
-  DOCKER_ENV=$(sed -n 's/^DOCKER_ENV=//p' "${IMAGE_ENV_FILE}" | head -1)
-  DOCKER_IMG=$(sed -n 's/^DOCKER_IMG=//p' "${IMAGE_ENV_FILE}" | head -1)
+  DOCKER_ENV=$(sed -n 's/^DOCKER_ENV=//p' "${IMAGE_ENV_FILE}" | head -1 | tr -d '[:space:]')
+  DOCKER_IMG=$(sed -n 's/^DOCKER_IMG=//p' "${IMAGE_ENV_FILE}" | head -1 | tr -d '[:space:]')
 fi
 
 export DOCKER_ENV=${DOCKER_ENV:-unknown}

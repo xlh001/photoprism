@@ -30,7 +30,7 @@ IMAGE_ENV_FILE="${INIT_SCRIPTS}/.env"
 DOCKER_ENV=""
 
 if [[ -r ${IMAGE_ENV_FILE} ]]; then
-  DOCKER_ENV=$(sed -n 's/^DOCKER_ENV=//p' "${IMAGE_ENV_FILE}" | head -1)
+  DOCKER_ENV=$(sed -n 's/^DOCKER_ENV=//p' "${IMAGE_ENV_FILE}" | head -1 | tr -d '[:space:]')
 fi
 
 DOCKER_ENV=${DOCKER_ENV:-prod}
