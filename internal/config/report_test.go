@@ -418,23 +418,40 @@ func TestConfig_ReportURIRedaction(t *testing.T) {
 
 	Features = Pro
 
-	conf := NewConfig(CliTestContext())
-	conf.options.PortalUrl = "https://portal:secret@example.com"
-	conf.options.JWKSUrl = "https://jwks:secret@jwks.example.com/.well-known/jwks.json"
-	conf.options.AdvertiseUrl = "https://cluster:secret@node.example.com"
-	conf.options.HttpsProxy = "https://proxy:secret@proxy.example.com:8443"
-	conf.options.VisionUri = "https://vision:secret@vision.example.com/api/v1/vision"
-	conf.SetThemeUrl("https://theme:secret@cdn.photoprism.app/theme.zip")
+	t.Run("Userinfo", func(t *testing.T) {
+		conf := NewConfig(CliTestContext())
+		conf.options.PortalUrl = "https://portal:secret@example.com"
+		conf.options.JWKSUrl = "https://jwks:secret@jwks.example.com/.well-known/jwks.json"
+		conf.options.AdvertiseUrl = "https://cluster:secret@node.example.com"
+		conf.options.HttpsProxy = "https://proxy:secret@proxy.example.com:8443"
+		conf.options.VisionUri = "https://vision:secret@vision.example.com/api/v1/vision"
+		conf.SetThemeUrl("https://theme:secret@cdn.photoprism.app/theme.zip")
 
-	rows, _ := conf.Report()
-	values := collect(rows)
+		rows, _ := conf.Report()
+		values := collect(rows)
 
-	assert.Equal(t, "https://portal:xxxxx@example.com", values["portal-url"])
-	assert.Equal(t, "https://jwks:xxxxx@jwks.example.com/.well-known/jwks.json", values["jwks-url"])
-	assert.Equal(t, "https://cluster:xxxxx@node.example.com/", values["advertise-url"])
-	assert.Equal(t, "https://proxy:xxxxx@proxy.example.com:8443", values["https-proxy"])
-	assert.Equal(t, "https://vision:xxxxx@vision.example.com/api/v1/vision", values["vision-uri"])
-	assert.Equal(t, "https://theme:xxxxx@cdn.photoprism.app/theme.zip", values["theme-url"])
+		assert.Equal(t, "https://portal:xxxxx@example.com", values["portal-url"])
+		assert.Equal(t, "https://jwks:xxxxx@jwks.example.com/.well-known/jwks.json", values["jwks-url"])
+		assert.Equal(t, "https://cluster:xxxxx@node.example.com/", values["advertise-url"])
+		assert.Equal(t, "https://proxy:xxxxx@proxy.example.com:8443", values["https-proxy"])
+		assert.Equal(t, "https://vision:xxxxx@vision.example.com/api/v1/vision", values["vision-uri"])
+		assert.Equal(t, "https://theme:xxxxx@cdn.photoprism.app/theme.zip", values["theme-url"])
+	})
+	t.Run("QueryParameter", func(t *testing.T) {
+		// A service commonly authenticates through a query parameter rather than the userinfo.
+		conf := NewConfig(CliTestContext())
+		conf.options.HttpsProxy = "https://proxy.example.com:8443/?password=notreal"
+		conf.options.VisionUri = "https://vision.example.com/api/v1/vision?api_key=notreal"
+		conf.SetThemeUrl("https://cdn.photoprism.app/theme.zip?access_token=notreal")
+
+		rows, _ := conf.Report()
+		values := collect(rows)
+
+		for _, name := range []string{"https-proxy", "vision-uri", "theme-url"} {
+			assert.NotContains(t, values[name], "notreal", "%s must not show the credential", name)
+			assert.Contains(t, values[name], "xxxxx", "%s must report that one was removed", name)
+		}
+	})
 }
 
 func TestFaceModelStatus(t *testing.T) {

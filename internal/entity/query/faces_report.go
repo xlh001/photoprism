@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -44,15 +43,6 @@ func PersonFilter(s string) (subjUID, nameLike string) {
 	return "", "%" + likeEscaper.Replace(s) + "%"
 }
 
-// likeColumn matches the column names LikeCond accepts: a plain identifier, optionally
-// qualified by a table alias.
-var likeColumn = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$`)
-
-// ValidLikeColumn reports whether a column name may be interpolated into a LIKE condition.
-func ValidLikeColumn(col string) bool {
-	return likeColumn.MatchString(col)
-}
-
 // LikeCond returns a LIKE condition for the given column that honors the escaping PersonFilter
 // applies. SQLite has no default escape character, so a pattern built without this matches nothing
 // there while matching correctly on MariaDB - the same command answering differently per driver.
@@ -62,7 +52,7 @@ func ValidLikeColumn(col string) bool {
 // argument and matches nothing, which keeps the caller's placeholder count right while making
 // the mistake visible in the log rather than in the statement.
 func LikeCond(col string) string {
-	if !ValidLikeColumn(col) {
+	if clean.SqlColumn(col) == "" {
 		log.Errorf("query: invalid column %s in like condition", clean.Log(col))
 		return fmt.Sprintf("1 = 0 AND '' LIKE ? ESCAPE '%s'", LikeEscape)
 	}

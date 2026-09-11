@@ -565,24 +565,6 @@ func TestSubjectReports_BirthdayAndPrivate(t *testing.T) {
 	assert.True(t, people[0].SubjPrivate)
 }
 
-func TestValidLikeColumn(t *testing.T) {
-	t.Run("Accepted", func(t *testing.T) {
-		for _, col := range []string{"subj_name", "s.subj_name", "_x", "A1", "t9.col_2"} {
-			assert.Truef(t, ValidLikeColumn(col), "%s must be accepted", col)
-		}
-	})
-	t.Run("Rejected", func(t *testing.T) {
-		// Anything that is not a plain identifier, since the column is part of the statement
-		// rather than a bound parameter.
-		for _, col := range []string{
-			"", " ", "1col", "subj name", "subj_name'", "subj_name;", "a.b.c", ".x", "x.",
-			"subj_name) OR (1=1", "subj_name--", "subj_name/*", "subj_name\n", "s.subj_name ",
-		} {
-			assert.Falsef(t, ValidLikeColumn(col), "%s must be rejected", col)
-		}
-	})
-}
-
 func TestLikeCond_InvalidColumn(t *testing.T) {
 	t.Run("BindsTheArgumentAndMatchesNothing", func(t *testing.T) {
 		// The caller still passes one argument, so the condition has to keep exactly one

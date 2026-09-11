@@ -61,3 +61,45 @@ func BenchmarkUriEmpty(b *testing.B) {
 		Uri("")
 	}
 }
+
+func TestUriCredentialParam(t *testing.T) {
+	t.Run("Credential", func(t *testing.T) {
+		for _, name := range []string{
+			"key", "api_key", "X-Api-Key", "apikey", "token", "access_token", "AccessToken",
+			"secret", "client_secret", "password", "passwd", "pwd", "auth", "authorization",
+			"credential", "credentials", "sig", "signature",
+		} {
+			assert.Truef(t, UriCredentialParam(name), "%s must be treated as a credential", name)
+		}
+	})
+	t.Run("NotACredential", func(t *testing.T) {
+		for _, name := range []string{"tier", "model", "format", "stream", "temperature", "n", ""} {
+			assert.Falsef(t, UriCredentialParam(name), "%s must be shown", name)
+		}
+	})
+}
+
+func TestUriRedactedQuery(t *testing.T) {
+	t.Run("Unparsable", func(t *testing.T) {
+		assert.Equal(t, "", UriRedacted("://nope"))
+	})
+	t.Run("NoQuery", func(t *testing.T) {
+		assert.Equal(t, "https://api.example.com/v1", UriRedacted("https://api.example.com/v1"))
+	})
+	t.Run("QueryOrderIsNotRelevant", func(t *testing.T) {
+		// Re-encoding sorts the parameters, so the assertion is on what each one holds.
+		result := UriRedacted("https://api.example.com/v1?z=1&api_key=notreal&a=2")
+		assert.Contains(t, result, "api_key=xxxxx")
+		assert.Contains(t, result, "z=1")
+		assert.Contains(t, result, "a=2")
+		assert.NotContains(t, result, "notreal")
+	})
+	t.Run("UserinfoAndQuery", func(t *testing.T) {
+		// A value that reads as redacted must not sit beside one that is not.
+		result := UriRedacted("https://user:pass@api.example.com/v1?access_token=notreal")
+		assert.NotContains(t, result, "pass@")
+		assert.NotContains(t, result, "notreal")
+		assert.Contains(t, result, "user:xxxxx@")
+		assert.Contains(t, result, "access_token=xxxxx")
+	})
+}

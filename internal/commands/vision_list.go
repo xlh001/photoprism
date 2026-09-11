@@ -3,7 +3,6 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/dustin/go-humanize/english"
@@ -23,69 +22,6 @@ var VisionListCommand = &cli.Command{
 	Action: visionListAction,
 }
 
-// endpointRedacted is what a credential in a displayed endpoint is replaced with. It matches
-// what net/url writes for a password, so a redacted query reads like a redacted userinfo.
-const endpointRedacted = "xxxxx"
-
-// credentialParams are the query parameter names whose value is treated as a credential.
-// Matched as substrings of the lowercased name, so "X-Api-Key" and "access_token" are covered.
-var credentialParams = []string{"key", "token", "secret", "password", "passwd", "pwd", "auth", "credential", "sig", "signature"}
-
-// credentialParam reports whether a query parameter name is one whose value must not be shown.
-func credentialParam(name string) bool {
-	name = strings.ToLower(name)
-
-	for _, s := range credentialParams {
-		if strings.Contains(name, s) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// endpointUriRedacted returns a service URI without the credentials it may carry, in the
-// userinfo or in a query parameter, and an empty string when it cannot be parsed.
-//
-// url.Redacted covers the userinfo only, while an endpoint commonly authenticates through a
-// query parameter instead, so both are removed before the value is displayed.
-func endpointUriRedacted(s string) string {
-	s = strings.TrimSpace(s)
-
-	if s == "" {
-		return ""
-	}
-
-	u, err := url.Parse(s)
-
-	if err != nil {
-		return ""
-	}
-
-	if q := u.Query(); len(q) > 0 {
-		redacted := false
-
-		for name, values := range q {
-			if !credentialParam(name) {
-				continue
-			}
-
-			for i := range values {
-				values[i] = endpointRedacted
-			}
-
-			q[name] = values
-			redacted = true
-		}
-
-		if redacted {
-			u.RawQuery = q.Encode()
-		}
-	}
-
-	return u.Redacted()
-}
-
 // visionEndpoint renders a service endpoint for display, without the credentials that
 // Service.Endpoint injects into the URL for the request itself.
 func visionEndpoint(uri, method string) string {
@@ -93,7 +29,7 @@ func visionEndpoint(uri, method string) string {
 		return ""
 	}
 
-	if redacted := endpointUriRedacted(clean.Uri(uri)); redacted != "" {
+	if redacted := clean.UriRedacted(clean.Uri(uri)); redacted != "" {
 		uri = redacted
 	} else {
 		// An unparsable URI is shown as a placeholder: it may still carry credentials.
