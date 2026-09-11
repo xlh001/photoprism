@@ -30,6 +30,10 @@ COPY . .
 # Update scripts in image.
 COPY --chown=root:root --chmod=755 ./scripts/dist/ /scripts/
 
+# Normalize the mode of the scripts, which run as root. This copy lands after the base image ran
+# "cleanup.sh", so it repeats what that script does at the end of every build.
+RUN sudo chmod -R go-w /scripts
+
 # Re-install the dev "mariadb" client config so a custom MARIADB_PORT in .env
 # is honored even when the base image was built before the port=<n> line was
 # removed (no-op once the next dated base image picks up the new .my.cnf).

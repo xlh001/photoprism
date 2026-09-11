@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
 # Verifies that every Dockerfile copying the dist scripts into the image sets an explicit
-# owner and mode, so that the files an image runs as root cannot inherit the build context's
-# permissions. Without "--chmod" the copy keeps the source modes, which are world-writable in
-# many working copies and on Windows hosts.
+# owner and mode, so that the files an image runs as root state their intended permissions
+# rather than inheriting the build context's, which are world-writable in many working copies
+# and on Windows hosts. The copy states the intent and this check guards it; "cleanup.sh"
+# normalizes the result at the end of every build.
 #
 # Usage: scripts/check-scripts-copy-mode.sh [dockerfile ...]
 #
