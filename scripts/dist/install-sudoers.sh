@@ -23,6 +23,35 @@ if [[ ! -f ${SCRIPTS_DIR}/entrypoint-init.sh ]]; then
   exit 1
 fi
 
+# The rules below grant root on a path, so that path must not name something another
+# account can replace: require root ownership and no write permission for group or others.
+require_root_owned() {
+  local target=$1 owner mode
+
+  owner=$(stat -c '%u' "${target}")
+  mode=$(stat -c '%a' "${target}")
+
+  if [[ ${owner} != "0" ]]; then
+    echo "Error: '${target}' must be owned by root." 1>&2
+    return 1
+  fi
+
+  if (( 0${mode} & 0022 )); then
+    echo "Error: '${target}' must not be writable by group or others." 1>&2
+    return 1
+  fi
+}
+
+# sudoers reads the command as a literal, and visudo accepts a path it would then split on
+# whitespace or expand as a wildcard, so a name it cannot represent is rejected here instead.
+if [[ ${SCRIPTS_DIR} =~ [^A-Za-z0-9/_.-] ]]; then
+  echo "Error: '${SCRIPTS_DIR}' contains a character that sudoers cannot name literally." 1>&2
+  exit 1
+fi
+
+require_root_owned "${SCRIPTS_DIR}"
+require_root_owned "${SCRIPTS_DIR}/entrypoint-init.sh"
+
 INIT_SCRIPT="${SCRIPTS_DIR}/entrypoint-init.sh"
 SUDOERS_FILE="/etc/sudoers.d/init"
 
