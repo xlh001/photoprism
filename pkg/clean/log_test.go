@@ -144,9 +144,11 @@ func TestFieldSep(t *testing.T) {
 		assert.Equal(t, "oktail", Username("ok"+sep+"tail"))
 		assert.Equal(t, "ok.tail", Handle("ok"+sep+"tail"))
 	})
-	t.Run("ErrorRenderingKeepsIt", func(t *testing.T) {
-		// errorText applies no quoting, so the character stays as printable text there.
-		assert.Contains(t, ErrorFull(errors.New("read"+sep+"failed")), sep)
+	t.Run("NotAnErrorMessage", func(t *testing.T) {
+		// Asserted exactly: a message is a sentence, so it is folded rather than quoted, and the
+		// three helpers dispose of the character in three different ways on purpose.
+		assert.Equal(t, "read?failed", ErrorFull(errors.New("read"+sep+"failed")))
+		assert.Equal(t, "read?failed", Error(errors.New("read"+sep+"failed")))
 	})
 }
 

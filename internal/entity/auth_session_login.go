@@ -198,14 +198,14 @@ func AuthLocal(user *User, frm form.Login, s *Session, c *gin.Context) (provider
 			err = authn.ErrPasscodeRequired
 
 			if s != nil {
-				event.AuditInfo([]string{clientIp, "session %s", "login as %s", err.Error()}, s.RefID, clean.LogQuote(username))
+				event.AuditInfo([]string{clientIp, "session %s", "login as %s", status.Error(err)}, s.RefID, clean.LogQuote(username))
 				s.Status = http.StatusUnauthorized
 			}
 
 			return provider, method, err
 		} else if valid, _, codeErr := user.VerifyPasscode(code); codeErr != nil {
 			if s != nil {
-				event.AuditWarn([]string{clientIp, "session %s", "login as %s", codeErr.Error()}, s.RefID, clean.LogQuote(username))
+				event.AuditWarn([]string{clientIp, "session %s", "login as %s", status.Error(codeErr)}, s.RefID, clean.LogQuote(username))
 				event.LoginError(clientIp, "api", username, s.UserAgent, codeErr.Error())
 				s.Status = http.StatusUnauthorized
 			}
@@ -215,7 +215,7 @@ func AuthLocal(user *User, frm form.Login, s *Session, c *gin.Context) (provider
 			err = authn.ErrInvalidPasscode
 
 			if s != nil {
-				event.AuditErr([]string{clientIp, "session %s", "login as %s", err.Error()}, s.RefID, clean.LogQuote(username))
+				event.AuditErr([]string{clientIp, "session %s", "login as %s", status.Error(err)}, s.RefID, clean.LogQuote(username))
 				event.LoginError(clientIp, "api", username, s.UserAgent, err.Error())
 				s.Status = http.StatusUnauthorized
 			}

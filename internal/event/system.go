@@ -28,6 +28,10 @@ func System(level logrus.Level, ev []string, args ...any) {
 		return
 	}
 
+	// The console copy renders the leading category outside Format, so the segments are folded
+	// here and both copies of the event carry the same field boundaries.
+	ev = formatSegments(ev)
+
 	// The hub copy keeps the leading category so an operator-facing consumer renders the same
 	// text as the console. No browser consumer receives this channel.
 	message := Format(ev, args...)

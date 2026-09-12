@@ -51,6 +51,12 @@ func TestErrorText(t *testing.T) {
 	t.Run("Trimmed", func(t *testing.T) {
 		assert.Equal(t, "failed", errorText("  failed  "))
 	})
+	t.Run("FieldSep", func(t *testing.T) {
+		// A message is one field, so the separator a value interpolated into it carries is folded.
+		assert.Equal(t, "album a?b not found", errorText("album a"+string(FieldSep)+"b not found"))
+		assert.NotContains(t, Error(fmt.Errorf("album %s not found", "a"+string(FieldSep)+"b")), string(FieldSep))
+		assert.NotContains(t, ErrorFull(fmt.Errorf("album %s not found", "a"+string(FieldSep)+"b")), string(FieldSep))
+	})
 	t.Run("Truncated", func(t *testing.T) {
 		assert.Len(t, errorText(strings.Repeat("e", LengthLimit*2)), LengthLimit)
 	})

@@ -57,7 +57,9 @@ func ErrorFull(err error) string {
 	return errorText(err.Error())
 }
 
-// errorText limits the length of an error message and removes problematic characters.
+// errorText limits the length of an error message and removes problematic characters, the field
+// separator among them. A message is a sentence rather than a value, so it is folded into one
+// field instead of being quoted the way Log bounds the values it renders.
 func errorText(s string) string {
 	if s = strings.TrimSpace(s); s == "" {
 		return "unknown error"
@@ -82,7 +84,7 @@ func errorText(s string) string {
 		switch r {
 		case '`', '"':
 			return '\''
-		case '%', '\\', '$', '<', '>', '{', '}':
+		case '%', '\\', '$', '<', '>', '{', '}', FieldSep:
 			return '?'
 		default:
 			return r
