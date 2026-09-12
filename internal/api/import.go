@@ -148,10 +148,9 @@ func StartImport(router *gin.RouterGroup) {
 		}
 
 		// Update moments if files have been imported.
-		if n := len(imported); n == 0 {
+		if imported.Processed() == 0 {
 			log.Infof("import: found no new files to import from %s", clean.Log(srcFolder))
 		} else {
-			log.Infof("import: imported %s", english.Plural(n, "file", "files"))
 			if moments := get.Moments(); moments == nil {
 				log.Warnf("import: moments service not set - you may have found a bug")
 			} else if err := moments.Start(); err != nil {
@@ -159,12 +158,15 @@ func StartImport(router *gin.RouterGroup) {
 			}
 		}
 
-		elapsed := int(time.Since(start).Seconds())
+		elapsed := time.Since(start)
+		seconds := int(elapsed.Seconds())
+
+		log.Infof("library: imported %s in %s", english.Plural(imported.Processed(), "file", "files"), elapsed)
 
 		// Show success message.
-		event.SuccessMsg(i18n.MsgImportCompletedIn, elapsed)
+		event.PublishSuccessMsg(i18n.MsgImportCompletedIn, seconds)
 
-		event.PublishCompleted([]string{"import.completed", "index.completed"}, opt.UID, opt.Action, elapsed)
+		event.PublishCompleted([]string{"import.completed", "index.completed"}, opt.UID, opt.Action, seconds)
 
 		for _, uid := range frm.Albums {
 			PublishAlbumEvent(StatusUpdated, uid)
@@ -178,7 +180,7 @@ func StartImport(router *gin.RouterGroup) {
 			log.Warnf("index: %s (update covers)", clean.Error(err))
 		}
 
-		c.JSON(http.StatusOK, i18n.NewResponse(http.StatusOK, i18n.MsgImportCompletedIn, elapsed))
+		c.JSON(http.StatusOK, i18n.NewResponse(http.StatusOK, i18n.MsgImportCompletedIn, seconds))
 	})
 }
 

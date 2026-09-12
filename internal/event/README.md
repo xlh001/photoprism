@@ -24,7 +24,8 @@ The `*Msg` helpers (`SuccessMsg`/`ErrorMsg`/`InfoMsg`/`WarnMsg`) publish a struc
 instance locale, `messageId` is the untranslated source string (`i18n.Source(id)`), and
 `messageParams` are the substitution values. The Web UI renders the notification from `messageId` +
 `messageParams` in each user's current UI language; `message` is a fallback. The accompanying log
-line is written with `i18n.Lower(id, params...)`, so server logs stay English in any locale. The plain
+line is written with `i18n.Lower(id, params...)`, so server logs stay English in any locale. Use
+`PublishSuccessMsg` to publish without a log line when the caller logs a more specific one. The plain
 `Success`/`Error`/`Info`/`Warn` string forms publish only `message` and are **not** localized —
 reserve them for already-translated or non-user-facing text.
 

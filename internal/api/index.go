@@ -182,18 +182,21 @@ func StartIndexing(router *gin.RouterGroup) {
 			}
 		}
 
-		elapsed := int(time.Since(start).Seconds())
+		elapsed := time.Since(start)
+		seconds := int(elapsed.Seconds())
+
+		log.Infof("library: indexed %s in %s", english.Plural(len(found), "file", "files"), elapsed)
 
 		// Report success only if at least one file was indexed.
 		if indexed > 0 {
-			event.SuccessMsg(i18n.MsgIndexingCompletedIn, elapsed)
+			event.PublishSuccessMsg(i18n.MsgIndexingCompletedIn, seconds)
 		}
 
-		event.PublishCompleted([]string{"index.completed"}, indOpt.UID, indOpt.Action, elapsed)
+		event.PublishCompleted([]string{"index.completed"}, indOpt.UID, indOpt.Action, seconds)
 
 		UpdateClientConfig()
 
-		c.JSON(http.StatusOK, i18n.NewResponse(http.StatusOK, i18n.MsgIndexingCompletedIn, elapsed))
+		c.JSON(http.StatusOK, i18n.NewResponse(http.StatusOK, i18n.MsgIndexingCompletedIn, seconds))
 	})
 }
 

@@ -251,14 +251,12 @@ func UploadUserFiles(router *gin.RouterGroup) {
 			}
 		}
 
-		elapsed := int(time.Since(start).Seconds())
+		elapsed := time.Since(start)
 
 		// Log number of successfully uploaded files.
-		resp := i18n.NewResponse(http.StatusOK, i18n.MsgFilesUploadedIn, len(uploads), elapsed)
+		log.Infof("library: uploaded %s in %s", english.Plural(len(uploads), "file", "files"), elapsed)
 
-		log.Info(resp.LowerString())
-
-		c.JSON(http.StatusOK, resp)
+		c.JSON(http.StatusOK, i18n.NewResponse(http.StatusOK, i18n.MsgFilesUploadedIn, len(uploads), int(elapsed.Seconds())))
 	})
 }
 
@@ -382,10 +380,9 @@ func ProcessUserUpload(router *gin.RouterGroup) {
 		}
 
 		// Update moments if files have been imported.
-		if n := imported.Processed(); n == 0 {
+		if imported.Processed() == 0 {
 			event.SystemInfo([]string{"upload", "found no new files in %s"}, clean.Log(uploadPath))
 		} else {
-			log.Infof("upload: imported %s", english.Plural(n, "file", "files"))
 			if moments := get.Moments(); moments == nil {
 				log.Warnf("upload: moments service not set - you may have found a bug")
 			} else if workerErr := moments.Start(); workerErr != nil {
@@ -393,11 +390,13 @@ func ProcessUserUpload(router *gin.RouterGroup) {
 			}
 		}
 
-		elapsed := int(time.Since(start).Seconds())
+		elapsed := time.Since(start)
+
+		log.Infof("library: imported %s in %s", english.Plural(imported.Processed(), "file", "files"), elapsed)
 
 		// Show success message.
-		event.SuccessMsg(i18n.MsgUploadProcessed)
-		event.PublishCompleted([]string{"import.completed", "index.completed", "upload.completed"}, opt.UID, "", elapsed)
+		event.PublishSuccessMsg(i18n.MsgUploadProcessed)
+		event.PublishCompleted([]string{"import.completed", "index.completed", "upload.completed"}, opt.UID, "", int(elapsed.Seconds()))
 
 		// Update album YAML backups and notify clients of the changes.
 		for _, album := range opt.Albums {

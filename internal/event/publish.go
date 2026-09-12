@@ -40,11 +40,18 @@ func Warn(msg string) {
 	Publish("notify.warning", Data{"message": msg})
 }
 
+// notifyMsg publishes a localized notification without logging it. The payload carries the
+// rendered message plus the untranslated source id and params, so the frontend can render it
+// in the user's current UI language.
+func notifyMsg(topic string, id i18n.Message, params ...any) {
+	Publish(topic, Data{"message": i18n.Msg(id, params...), "messageId": i18n.Source(id), "messageParams": params})
+}
+
 // publishMsg logs and publishes a localized notification.
 // The log line stays English through i18n.Lower, so server logs do not follow the instance locale.
 func publishMsg(level logrus.Level, topic string, id i18n.Message, params ...any) {
 	Log.Log(level, i18n.Lower(id, params...))
-	Publish(topic, Data{"message": i18n.Msg(id, params...), "messageId": i18n.Source(id), "messageParams": params})
+	notifyMsg(topic, id, params...)
 }
 
 // ErrorMsg publishes a localized error notification.
@@ -55,6 +62,12 @@ func ErrorMsg(id i18n.Message, params ...any) {
 // SuccessMsg publishes a localized success notification.
 func SuccessMsg(id i18n.Message, params ...any) {
 	publishMsg(logrus.InfoLevel, "notify.success", id, params...)
+}
+
+// PublishSuccessMsg publishes a localized success notification without logging it,
+// for callers that write a more specific log line themselves.
+func PublishSuccessMsg(id i18n.Message, params ...any) {
+	notifyMsg("notify.success", id, params...)
 }
 
 // InfoMsg publishes a localized informational notification.

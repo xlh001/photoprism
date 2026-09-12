@@ -6,6 +6,8 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/dustin/go-humanize/english"
+
 	"github.com/photoprism/photoprism/internal/config"
 	"github.com/photoprism/photoprism/internal/entity"
 	"github.com/photoprism/photoprism/internal/event"
@@ -89,11 +91,14 @@ func (w *Index) Start() (err error) {
 		log.Warnf("moments: %s", err)
 	}
 
-	elapsed := int(time.Since(start).Seconds())
+	elapsed := time.Since(start)
+	seconds := int(elapsed.Seconds())
 
-	event.SuccessMsg(i18n.MsgIndexingCompletedIn, elapsed)
+	log.Infof("library: indexed %s in %s", english.Plural(len(found), "file", "files"), elapsed)
 
-	event.PublishCompleted([]string{"index.completed"}, indOpt.UID, indOpt.Action, elapsed)
+	event.PublishSuccessMsg(i18n.MsgIndexingCompletedIn, seconds)
+
+	event.PublishCompleted([]string{"index.completed"}, indOpt.UID, indOpt.Action, seconds)
 
 	return nil
 }

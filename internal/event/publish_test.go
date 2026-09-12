@@ -58,6 +58,62 @@ func TestPublishMsg(t *testing.T) {
 	})
 }
 
+func TestNotifyMsg(t *testing.T) {
+	t.Run("WithParams", func(t *testing.T) {
+		buf := captureLog(t)
+		s := Subscribe("notify.info")
+		notifyMsg("notify.info", i18n.MsgIndexingFiles, "/photos")
+		msg := <-s.Receiver
+		Unsubscribe(s)
+
+		assert.Equal(t, "notify.info", msg.Name)
+		assert.Equal(t, "Indexing files in /photos", msg.Fields["message"])
+		assert.Equal(t, "Indexing files in %s", msg.Fields["messageId"])
+		assert.Equal(t, []any{"/photos"}, msg.Fields["messageParams"])
+		assert.Empty(t, buf.String())
+	})
+	t.Run("WithoutParams", func(t *testing.T) {
+		buf := captureLog(t)
+		s := Subscribe("notify.error")
+		notifyMsg("notify.error", i18n.ErrBusy)
+		msg := <-s.Receiver
+		Unsubscribe(s)
+
+		assert.Equal(t, "notify.error", msg.Name)
+		assert.Equal(t, "Busy, please try again later", msg.Fields["message"])
+		assert.Equal(t, "Busy, please try again later", msg.Fields["messageId"])
+		assert.Empty(t, msg.Fields["messageParams"])
+		assert.Empty(t, buf.String())
+	})
+}
+
+func TestPublishSuccessMsg(t *testing.T) {
+	t.Run("WithParams", func(t *testing.T) {
+		buf := captureLog(t)
+		s := Subscribe("notify.success")
+		PublishSuccessMsg(i18n.MsgIndexingCompletedIn, 11)
+		msg := <-s.Receiver
+		Unsubscribe(s)
+
+		assert.Equal(t, "notify.success", msg.Name)
+		assert.Equal(t, "Indexing completed in 11 s", msg.Fields["message"])
+		assert.Equal(t, "Indexing completed in %d s", msg.Fields["messageId"])
+		assert.Equal(t, []any{11}, msg.Fields["messageParams"])
+		assert.Empty(t, buf.String())
+	})
+	t.Run("WithoutParams", func(t *testing.T) {
+		buf := captureLog(t)
+		s := Subscribe("notify.success")
+		PublishSuccessMsg(i18n.MsgAlbumCreated)
+		msg := <-s.Receiver
+		Unsubscribe(s)
+
+		assert.Equal(t, "Album created", msg.Fields["message"])
+		assert.Equal(t, "Album created", msg.Fields["messageId"])
+		assert.Empty(t, buf.String())
+	})
+}
+
 func TestSuccessMsg(t *testing.T) {
 	t.Run("WithParams", func(t *testing.T) {
 		s := Subscribe("notify.success")
