@@ -35,7 +35,7 @@ func GetConfigOptions(router *gin.RouterGroup) {
 			return
 		}
 
-		c.JSON(http.StatusOK, conf.Options())
+		c.JSON(http.StatusOK, conf.RedactedOptions())
 	})
 }
 
@@ -79,6 +79,11 @@ func SaveConfigOptions(router *gin.RouterGroup) {
 			log.Debugf("config: ignored %s in options update", clean.LogNames(removed))
 		}
 
+		// A value returned redacted and sent back unchanged sets nothing.
+		if removed := conf.RemoveRedactedOptionValues(v); len(removed) > 0 {
+			log.Debugf("config: ignored unchanged %s in options update", clean.LogNames(removed))
+		}
+
 		if _, err := conf.SaveOptionsPatch(v); err != nil {
 			// A value that does not fit the option it sets is the request's fault, not the server's.
 			if errors.Is(err, config.ErrInvalidOptionValue) {
@@ -102,6 +107,6 @@ func SaveConfigOptions(router *gin.RouterGroup) {
 		UpdateClientConfig()
 
 		// Return updated config options.
-		c.JSON(http.StatusOK, conf.Options())
+		c.JSON(http.StatusOK, conf.RedactedOptions())
 	})
 }
