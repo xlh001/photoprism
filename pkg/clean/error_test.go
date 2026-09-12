@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 	iofs "io/fs"
+	"net"
+	"net/url"
 	"os"
+	"os/exec"
 	"strings"
 	"syscall"
 	"testing"
@@ -329,3 +332,73 @@ func (e *wrappedError) Error() string { return e.msg }
 
 // Unwrap returns the cause.
 func (e *wrappedError) Unwrap() error { return e.cause }
+
+func TestErrorLocators(t *testing.T) {
+	// Each of these renders a location through the error it carries, so Error collects it the way
+	// it already collects a file path. The separator requirement in errorLocation is what keeps a
+	// bare host or a host:port out, which the last two cases pin.
+	t.Run("Url", func(t *testing.T) {
+		err := &url.Error{Op: "Get", URL: "https://cdn.example.com/a/b.tar.gz", Err: errors.New("i/o timeout")}
+		out := Error(err)
+		assert.NotContains(t, out, "cdn.example.com")
+		assert.Contains(t, out, errorPathPlaceholder)
+		assert.Contains(t, ErrorFull(err), "cdn.example.com")
+	})
+	t.Run("Command", func(t *testing.T) {
+		err := &exec.Error{Name: "/usr/local/bin/darktable-cli", Err: errors.New("no such file")}
+		out := Error(err)
+		assert.NotContains(t, out, "/usr/local/bin")
+		assert.Contains(t, out, errorPathPlaceholder)
+	})
+	t.Run("EscapedSpelling", func(t *testing.T) {
+		// Both render with %q, so a value holding a character Quote escapes reaches the message
+		// in its escaped form and only matches when that form is collected too.
+		u := &url.Error{Op: "Get", URL: `https://cdn.example.com/a?x=\y`, Err: errors.New("timeout")}
+		assert.NotContains(t, Error(u), "cdn.example.com")
+		e := &exec.Error{Name: `C:\Program Files\pp\ffmpeg.exe`, Err: errors.New("not found")}
+		assert.NotContains(t, Error(e), "Program Files")
+	})
+	t.Run("UnixSocket", func(t *testing.T) {
+		err := &net.OpError{Op: "dial", Net: "unix", Addr: &net.UnixAddr{Name: "/var/run/photoprism/vision.sock", Net: "unix"}, Err: errors.New("connection refused")}
+		out := Error(err)
+		assert.NotContains(t, out, "/var/run/photoprism")
+		assert.Contains(t, out, errorPathPlaceholder)
+	})
+	t.Run("NetworkAddressIsNotALocation", func(t *testing.T) {
+		// A host and port carry no separator, so the existing guard leaves them alone - they name
+		// the peer, which the caller is already reporting.
+		err := &net.OpError{Op: "write", Net: "tcp", Addr: &net.TCPAddr{IP: net.ParseIP("192.0.2.9"), Port: 443}, Err: errors.New("broken pipe")}
+		assert.Contains(t, Error(err), "192.0.2.9:443")
+	})
+	t.Run("NilAddr", func(t *testing.T) {
+		err := &net.OpError{Op: "read", Net: "tcp", Err: errors.New("broken pipe")}
+		assert.NotEmpty(t, Error(err))
+	})
+	t.Run("Wrapped", func(t *testing.T) {
+		// The locator is collected from anywhere in the chain, as a file path already is.
+		inner := &url.Error{Op: "Get", URL: "https://cdn.example.com/a/b.tar.gz", Err: errors.New("refused")}
+		assert.NotContains(t, Error(fmt.Errorf("download failed (%w)", inner)), "cdn.example.com")
+	})
+}
+
+func TestAddrString(t *testing.T) {
+	t.Run("Nil", func(t *testing.T) {
+		assert.Empty(t, addrString(nil))
+	})
+	t.Run("TypedNil", func(t *testing.T) {
+		// An interface holding a nil pointer is not nil, and String would dereference it.
+		var a *net.UnixAddr
+		assert.NotPanics(t, func() { assert.Empty(t, addrString(a)) })
+	})
+	t.Run("Set", func(t *testing.T) {
+		assert.Equal(t, "/run/photoprism.sock", addrString(&net.UnixAddr{Name: "/run/photoprism.sock", Net: "unix"}))
+	})
+}
+
+func TestQuotedInner(t *testing.T) {
+	// An error rendering a value with %q carries the escaped spelling, which is what has to be
+	// matched for the replacement to land.
+	assert.Equal(t, `a/b`, quotedInner(`a/b`))
+	assert.Equal(t, `C:\\x\\y`, quotedInner(`C:\x\y`))
+	assert.Equal(t, `a\"b`, quotedInner(`a"b`))
+}

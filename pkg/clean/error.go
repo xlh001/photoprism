@@ -2,9 +2,13 @@ package clean
 
 import (
 	iofs "io/fs"
+	"net"
+	"net/url"
 	"os"
+	"os/exec"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -99,6 +103,27 @@ func errorText(s string) string {
 	return s
 }
 
+// quotedInner returns a value as strconv.Quote renders it, without the enclosing quotes, which is
+// the spelling an error using %q puts in its message.
+func quotedInner(s string) string {
+	q := strconv.Quote(s)
+
+	return q[1 : len(q)-1]
+}
+
+// addrString renders a network address, which is absent on most operating errors. A nil pointer
+// behind the interface is checked the way the chain walk checks a nil error, since String is
+// called while a failure is already being handled.
+func addrString(a net.Addr) string {
+	if a == nil {
+		return ""
+	} else if v := reflect.ValueOf(a); v.Kind() == reflect.Pointer && v.IsNil() {
+		return ""
+	}
+
+	return a.String()
+}
+
 // errorLocation reports whether a value names a location rather than a bare name. Replacement
 // is by substring, so a value without a separator would also match ordinary words, and one
 // built only from separators and dots would match a path fragment of every message.
@@ -106,9 +131,10 @@ func errorLocation(s string) bool {
 	return strings.ContainsAny(s, errorPathSeparators) && strings.Trim(s, errorPathTrivial) != ""
 }
 
-// errorPaths returns the file paths named by err and the errors it wraps, deduplicated and
-// longest first so that replacing one cannot leave a shorter path's remainder behind. It
-// reports complete unless the chain exceeded the node budget, which also ends a cycle.
+// errorPaths returns the locations named by err and the errors it wraps, deduplicated and longest
+// first so that replacing one cannot leave a shorter one's remainder behind. A URL, a command name
+// and a socket address are collected alongside a file path, since each is a location and each is
+// rendered by the error that carries it. It reports complete unless the chain exceeded the budget.
 func errorPaths(err error) (out []string, complete bool) {
 	seen := make(map[string]struct{})
 	nodes := 0
@@ -138,6 +164,14 @@ func errorPaths(err error) (out []string, complete bool) {
 			found = []string{t.Path}
 		case *os.LinkError:
 			found = []string{t.Old, t.New}
+		case *url.Error:
+			// Rendered with %q, so the escaped spelling is what the message carries.
+			found = []string{t.URL, quotedInner(t.URL)}
+		case *exec.Error:
+			// Quoted the same way, so a Windows path with backslashes needs the escaped spelling.
+			found = []string{t.Name, quotedInner(t.Name)}
+		case *net.OpError:
+			found = []string{addrString(t.Source), addrString(t.Addr)}
 		}
 
 		for _, p := range found {
