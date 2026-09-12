@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/photoprism/photoprism/internal/auth/acl"
 	"github.com/photoprism/photoprism/internal/event"
@@ -299,7 +298,7 @@ func (c *Config) OIDCReport() (rows [][]string, cols []string) {
 	rows = [][]string{
 		{"oidc-uri", c.OIDCUri().String()},
 		{"oidc-client", c.OIDCClient()},
-		{"oidc-secret", strings.Repeat("*", utf8.RuneCountInString(c.OIDCSecret()))},
+		{"oidc-secret", maskedSecret(c.OIDCSecret())},
 		{"oidc-scopes", c.OIDCScopes()},
 		{"oidc-prompt", c.OIDCPrompt()},
 		{"oidc-provider", c.OIDCProvider()},
