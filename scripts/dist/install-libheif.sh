@@ -4,19 +4,67 @@
 # On libheif 1.21+, heif-convert is a symlink to heif-dec and heif-thumbnailer is no longer shipped.
 # bash <(curl -s https://raw.githubusercontent.com/photoprism/photoprism/develop/scripts/dist/install-libheif.sh)
 #
-# Resolute installs photoprism-libheif via a real .deb that Provides/Replaces/Conflicts
-# apt's libheif1, libheif-dev, libheif-examples, and libheif-plugin-* names. Other Debian
-# distros get a contentless stub with the same metadata after the tarball extract. Either
-# way, the package is apt-mark held so dist-upgrade leaves it alone — but an explicit
-# `apt install libheif1` would still trigger the Conflicts: relation and replace
-# photoprism-libheif, silently breaking the from-source HEIC pipeline. Don't do that;
-# upgrade by bumping LIBHEIF_VERSION and rerunning this script instead.
+# By default the binaries are installed under /usr/local alongside the distribution packages,
+# which is what that prefix is for: no file conflicts anything, and the loader prefers them.
+#
+#   --deb        install through apt, replacing the distribution libheif packages and anything
+#                that depends on them (default: install under /usr/local alongside them)
+#   --downgrade  allow installing an older version over one already in the prefix
+#
+# --deb is what our own images use, and they select it through PHOTOPRISM_CONTAINER rather
+# than by passing the flag. It exists so an image carries one libheif rather than two: Resolute
+# installs photoprism-libheif via a real .deb that Provides/Replaces/Conflicts apt's libheif1,
+# libheif-dev, libheif-examples and libheif-plugin-* names, and other Debian distros get a
+# contentless stub with the same metadata after the tarball extract. Either way the package is
+# apt-mark held so dist-upgrade leaves it alone - but an explicit `apt install libheif1` would
+# still trigger the Conflicts: relation and replace photoprism-libheif, silently breaking the
+# from-source HEIC pipeline. Don't do that; upgrade by bumping LIBHEIF_VERSION and rerunning
+# this script with the same path selection it was installed with.
 
 set -e
 
-# Show usage information if first argument is --help.
-if [[ ${1} == "--help" ]]; then
-  echo "Usage: ${0##*/} [destdir] [version]" 1>&2
+# USE_DEB selects the packaging path; DOWNGRADE overrides the version check. Neither implies
+# the other. PHOTOPRISM_CONTAINER marks our own images, which are the images the packaging
+# path exists for.
+USE_DEB=0
+DOWNGRADE=0
+SHOW_HELP=0
+ARGS=()
+
+if [[ ${PHOTOPRISM_CONTAINER:-} == "true" ]]; then
+  USE_DEB=1
+fi
+
+for arg in "$@"; do
+  case $arg in
+    --deb) USE_DEB=1 ;;
+    --downgrade) DOWNGRADE=1 ;;
+    --help) SHOW_HELP=1 ;;
+    -*)
+      echo "Error: unknown option '${arg}'. Run with --help for the available ones." 1>&2
+      exit 1
+      ;;
+    *) ARGS+=("$arg") ;;
+  esac
+done
+
+set -- "${ARGS[@]+"${ARGS[@]}"}"
+
+if [[ $# -gt 2 ]]; then
+  echo "Error: expected at most [destdir] [version]. Run with --help." 1>&2
+  exit 1
+fi
+
+# Show usage information when --help was given.
+if [[ ${SHOW_HELP} == 1 ]]; then
+  cat 1>&2 <<'USAGE'
+Usage: install-libheif.sh [--deb] [--downgrade] [destdir] [version]
+
+  --deb        install through apt, replacing the distribution libheif packages and
+               anything that depends on them (default: install under /usr/local
+               alongside them)
+  --downgrade  allow installing an older version over one already in the prefix
+USAGE
   exit 0
 fi
 
@@ -114,6 +162,22 @@ if [[ $(id -u) != "0" ]] && [[ $DESTDIR == "/usr" || $DESTDIR == "/usr/local" ]]
   exit 1
 fi
 
+# /usr is dpkg's own prefix, so an archive unpacked there is an unowned library in a directory
+# the package manager believes it manages. /usr/local is the prefix meant for exactly this.
+if [[ $DESTDIR == "/usr" ]] && [[ $USE_DEB == 0 ]]; then
+  echo "Error: installing into /usr without --deb would leave files no package owns." 1>&2
+  echo "       Use the default /usr/local prefix, or pass --deb to install through apt." 1>&2
+  exit 1
+fi
+
+# A host already carrying our package, installing without the packaging path, ends up with the
+# library coming from the prefix while dpkg still reports the packaged version. Say so: only the
+# operator can decide between reinstalling the distribution package and rerunning with --deb.
+if [[ $USE_DEB == 0 ]] && command -v dpkg > /dev/null && dpkg -s photoprism-libheif > /dev/null 2>&1; then
+  echo "ℹ️ photoprism-libheif is installed through apt on this host, and this run installs into" 1>&2
+  echo "   \"${DESTDIR}\" instead. The version dpkg reports will not track the one in use." 1>&2
+fi
+
 mkdir -p "$DESTDIR"
 
 # Map codenames to find and use a compatible version.
@@ -123,13 +187,42 @@ case $VERSION_CODENAME in
     ;;
 esac
 
+# Installing under /usr/local puts our build ahead of the distribution one for everything that
+# loads libheif, which is what that prefix is for and is correct while ours is newer. Going
+# backwards is the failure worth catching: a stale copy left in the prefix keeps shadowing a
+# newer distribution library for every consumer, and neither apt-get check nor dpkg -C reports
+# anything, because the package manager never owned the file.
+if [[ -e ${DESTDIR}/lib/libheif.so.1 || -L ${DESTDIR}/lib/libheif.so.1 ]]; then
+  EXISTING_SO=$(readlink -f "${DESTDIR}/lib/libheif.so.1" 2>/dev/null || true)
+  EXISTING_VERSION=${EXISTING_SO##*/libheif.so.}
+  TARGET_VERSION=${LIBHEIF_VERSION#v}
+
+  # Only a dotted version is comparable; anything else is a layout we did not write, and
+  # guessing at it would be worse than saying so.
+  if [[ -n ${EXISTING_VERSION} ]] && [[ ${EXISTING_VERSION} == "${EXISTING_SO}" || ! ${EXISTING_VERSION} =~ ^[0-9]+\.[0-9][0-9A-Za-z.+~-]*$ ]]; then
+    echo "ℹ️ ${DESTDIR}/lib/libheif.so.1 carries no recognizable version; installing ${LIBHEIF_VERSION#v} over it." 1>&2
+  elif [[ -n ${EXISTING_VERSION} ]] && [[ ${EXISTING_VERSION} != "${TARGET_VERSION}" ]]; then
+    # sort -V puts the lower version first, so the existing one is newer when it sorts last.
+    NEWEST=$(printf '%s\n%s\n' "${EXISTING_VERSION}" "${TARGET_VERSION}" | sort -V | tail -1)
+
+    if [[ ${NEWEST} == "${EXISTING_VERSION}" ]] && [[ ${DOWNGRADE} == 0 ]]; then
+      echo "❌ ${DESTDIR}/lib already has libheif ${EXISTING_VERSION}, which is newer than ${TARGET_VERSION}." 1>&2
+      echo "   Installing it would leave everything on this system resolving to the older build," 1>&2
+      echo "   which no package manager reports. Pass --downgrade to install it anyway." 1>&2
+      exit 1
+    fi
+
+    echo "ℹ️ Replacing libheif ${EXISTING_VERSION} in \"${DESTDIR}/lib\" with ${TARGET_VERSION}." 1>&2
+  fi
+fi
+
 echo "Installing libheif..."
 
 # On Ubuntu 26.04 LTS (Resolute) we ship a real .deb (photoprism-libheif) so
 # apt's libheif1 / libheif-dev / libheif-plugin-* don't coexist with the
 # from-source build. The .deb only exists when DESTDIR is left at the default
-# /usr or /usr/local — dpkg paths are absolute and ignore custom prefixes.
-if [[ $VERSION_CODENAME == "resolute" ]] && [[ $DESTDIR == "/usr" || $DESTDIR == "/usr/local" ]] && command -v apt-get > /dev/null; then
+# /usr or /usr/local - dpkg paths are absolute and ignore custom prefixes.
+if [[ $USE_DEB == 1 ]] && [[ $VERSION_CODENAME == "resolute" ]] && [[ $DESTDIR == "/usr" || $DESTDIR == "/usr/local" ]] && command -v apt-get > /dev/null; then
   ARCHIVE="libheif-${VERSION_CODENAME}-${DESTARCH}-${LIBHEIF_VERSION}.deb"
   URL="https://dl.photoprism.app/dist/libheif/${ARCHIVE}"
   TMPDEB="${STAGING_DIR}/${ARCHIVE}"
@@ -208,6 +301,12 @@ if ! tar -tzf "$TMPTAR" > /dev/null 2>&1; then
   exit 1
 fi
 
+# ldconfig resolves a soname to the highest version it finds in the directory, so a previous
+# install left beside this one would keep winning and the extracted build would never take
+# effect - silently, since the link it repoints looks correct. The archive carries the whole
+# set, so removing the versioned files first leaves exactly one candidate.
+rm -f "${DESTDIR}"/lib/libheif.so.1.*
+
 if ! tar --overwrite --mode=755 -xzf "$TMPTAR" -C "$DESTDIR"; then
   echo "❌ Failed to extract \"$URL\" to \"$DESTDIR\"."
   exit 1
@@ -229,7 +328,7 @@ fi
 # dist-upgrade. The actual binaries live under $DESTDIR (typically /usr/local/lib),
 # and ldconfig already orders /usr/local/lib ahead of /usr/lib so consumers resolve
 # to the from-source build. Resolute exits earlier through the real .deb path above.
-if [[ $DESTDIR == "/usr" || $DESTDIR == "/usr/local" ]] && command -v apt-get > /dev/null && command -v dpkg-deb > /dev/null; then
+if [[ $USE_DEB == 1 ]] && [[ $DESTDIR == "/usr" || $DESTDIR == "/usr/local" ]] && command -v apt-get > /dev/null && command -v dpkg-deb > /dev/null; then
   INSTALLED_LIBHEIF_PKGS=$(dpkg-query -W -f='${Package}\n' 'libheif*' 2>/dev/null | grep -v '^photoprism-libheif$' | sort -u || true)
   if [[ -n $INSTALLED_LIBHEIF_PKGS ]]; then
     UPSTREAM_VERSION=${LIBHEIF_VERSION#v}
@@ -292,6 +391,20 @@ STUBEOF
     fi
 
     rm -rf "$STUB_DIR"
+  fi
+fi
+
+# Assert the outcome rather than trusting the branch: a marker that did not arm the packaging
+# path, or a copy left behind in the prefix, both produce a successful-looking run that resolves
+# to a different library than intended. Nothing else in a build would report either.
+if command -v ldconfig > /dev/null; then
+  RESOLVED=$(ldconfig -p 2>/dev/null | grep -c "libheif\.so\.1" || true)
+
+  if [[ $USE_DEB == 1 ]] && [[ ${RESOLVED} -gt 1 ]]; then
+    echo "⚠️ ${RESOLVED} copies of libheif.so.1 are visible to the loader; this path installs one." 1>&2
+    ldconfig -p 2>/dev/null | grep "libheif\.so\.1" 1>&2 || true
+  elif [[ ${RESOLVED} -eq 0 ]]; then
+    echo "⚠️ No libheif.so.1 is visible to the loader after installing." 1>&2
   fi
 fi
 
