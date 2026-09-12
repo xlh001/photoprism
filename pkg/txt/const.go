@@ -14,7 +14,7 @@ const (
 	False = enum.False
 )
 
-// Additional english language strings.
+// Additional English language strings.
 const (
 	EnOr   = "or"
 	EnAnd  = "and"
