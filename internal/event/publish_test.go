@@ -1,15 +1,62 @@
 package event
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/i18n"
 )
+
+// captureLog redirects the logger to a buffer at info level and restores it afterwards.
+func captureLog(t *testing.T) *bytes.Buffer {
+	buf := &bytes.Buffer{}
+	logger := logrus.New()
+	logger.SetOutput(buf)
+	logger.SetLevel(logrus.InfoLevel)
+
+	orig := Log
+	Log = logger
+	t.Cleanup(func() { Log = orig })
+
+	return buf
+}
+
+func TestPublishMsg(t *testing.T) {
+	t.Run("LogStaysEnglish", func(t *testing.T) {
+		// Server logs are read in a terminal and under /library/logs, so they must not follow
+		// the instance locale even when the published notification does.
+		i18n.SetLocale("he")
+		t.Cleanup(func() { i18n.SetLocale(string(i18n.Default)) })
+
+		buf := captureLog(t)
+		s := Subscribe("notify.success")
+		SuccessMsg(i18n.MsgIndexingCompletedIn, 11)
+		msg := <-s.Receiver
+		Unsubscribe(s)
+
+		// Guards the case itself: without a loaded catalog the payload would render English
+		// and the log assertion below would hold for the wrong reason.
+		require.NotEqual(t, "Indexing completed in 11 s", msg.Fields["message"])
+		assert.Contains(t, buf.String(), "indexing completed in 11 s")
+		assert.Equal(t, "Indexing completed in %d s", msg.Fields["messageId"])
+		assert.Equal(t, []any{11}, msg.Fields["messageParams"])
+	})
+	t.Run("DefaultLocale", func(t *testing.T) {
+		buf := captureLog(t)
+		s := Subscribe("notify.warning")
+		WarnMsg(i18n.ErrBusy)
+		<-s.Receiver
+		Unsubscribe(s)
+
+		assert.Contains(t, buf.String(), "busy, please try again later")
+	})
+}
 
 func TestSuccessMsg(t *testing.T) {
 	t.Run("WithParams", func(t *testing.T) {
