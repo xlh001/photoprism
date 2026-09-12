@@ -402,3 +402,28 @@ func TestQuotedInner(t *testing.T) {
 	assert.Equal(t, `C:\\x\\y`, quotedInner(`C:\x\y`))
 	assert.Equal(t, `a\"b`, quotedInner(`a"b`))
 }
+
+func TestErrorFlattenedUrl(t *testing.T) {
+	// A message can carry the same URL in two spellings: the one a producer rendered into its own
+	// text and the one the wrapper holds, which net/http writes with the password replaced. Both
+	// are covered, and because they reduce to the same text the location goes with them.
+	u, parseErr := url.Parse("https://user:notreal@cdn.example.com/a/b.tar.gz")
+	require.NoError(t, parseErr)
+
+	wrapped := &url.Error{Op: "Get", URL: "https://user:***@cdn.example.com/a/b.tar.gz", Err: errors.New("i/o timeout")}
+	err := fmt.Errorf("failed to download %s (%w)", u.String(), wrapped)
+
+	t.Run("Error", func(t *testing.T) {
+		out := Error(err)
+		assert.NotContains(t, out, "notreal")
+		assert.NotContains(t, out, "cdn.example.com")
+		assert.Equal(t, 2, strings.Count(out, errorPathPlaceholder))
+	})
+	t.Run("ErrorFull", func(t *testing.T) {
+		// The location is the detail an operator acts on; the credential is not.
+		out := ErrorFull(err)
+		assert.NotContains(t, out, "notreal")
+		assert.Contains(t, out, "cdn.example.com")
+		assert.Contains(t, out, UriRedactedValue)
+	})
+}

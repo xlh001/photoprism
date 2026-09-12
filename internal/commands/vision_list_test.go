@@ -26,10 +26,13 @@ func TestVisionEndpoint(t *testing.T) {
 			want:   "POST https://vision:xxxxx@vision.example.com/api/generate",
 		},
 		{
-			name:   "UsernameOnly",
+			// Nothing distinguishes a name in this position from an access token, which several
+			// services carry there, so the name goes and the endpoint is still identified by its
+			// scheme, host and path.
+			name:   "NameWithoutPassword",
 			uri:    "https://vision@vision.example.com/api/generate",
 			method: "POST",
-			want:   "POST https://vision@vision.example.com/api/generate",
+			want:   "POST https://xxxxx@vision.example.com/api/generate",
 		},
 		{
 			name:   "QueryIsKept",

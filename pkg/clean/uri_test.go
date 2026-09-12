@@ -103,3 +103,76 @@ func TestUriRedactedQuery(t *testing.T) {
 		assert.Contains(t, result, "access_token=xxxxx")
 	})
 }
+
+func TestUriCredentials(t *testing.T) {
+	// The split follows net/url: the first colon bounds the name, the last at sign bounds the
+	// userinfo. A name with no password beside it is treated as the secret, because nothing
+	// distinguishes an access token in that position from an account name.
+	t.Run("Password", func(t *testing.T) {
+		assert.Equal(t, "https://user:"+UriRedactedValue+"@example.com/a",
+			UriCredentials("https://user:notreal@example.com/a"))
+	})
+	t.Run("PasswordHoldingAColon", func(t *testing.T) {
+		assert.Equal(t, "https://user:"+UriRedactedValue+"@example.com/a",
+			UriCredentials("https://user:not:real@example.com/a"))
+	})
+	t.Run("PasswordHoldingAnAtSign", func(t *testing.T) {
+		assert.Equal(t, "https://user:"+UriRedactedValue+"@example.com/a",
+			UriCredentials("https://user:not@real@example.com/a"))
+	})
+	t.Run("NameHoldingAnAtSign", func(t *testing.T) {
+		assert.Equal(t, "smtps://noreply@example.com:"+UriRedactedValue+"@mail.example.com/a",
+			UriCredentials("smtps://noreply@example.com:notreal@mail.example.com/a"))
+	})
+	t.Run("NameWithoutPassword", func(t *testing.T) {
+		assert.Equal(t, "https://"+UriRedactedValue+"@example.com/a",
+			UriCredentials("https://ghp000000000000000000@example.com/a"))
+	})
+	t.Run("EmptyPassword", func(t *testing.T) {
+		// Nothing follows the colon, so the name is what is left to hide.
+		assert.Equal(t, "https://"+UriRedactedValue+"@example.com/a",
+			UriCredentials("https://user:@example.com/a"))
+	})
+	t.Run("InLongerText", func(t *testing.T) {
+		out := UriCredentials("failed to download https://user:notreal@example.com/a (timeout)")
+		assert.NotContains(t, out, "notreal")
+		assert.Contains(t, out, "example.com/a")
+	})
+	t.Run("TwoUrls", func(t *testing.T) {
+		out := UriCredentials("from https://a:1234@x.example to https://b:5678@y.example")
+		assert.NotContains(t, out, "1234")
+		assert.NotContains(t, out, "5678")
+	})
+	t.Run("NotAUrl", func(t *testing.T) {
+		for _, s := range []string{
+			"invalid key=value pair at a:b@c",
+			"user@example.com",
+			"dial https://example.com:8080 failed",
+			"https://example.com/a?q=1:2@3",
+			`{"endpoint":"https://api.example.com","user":"bob@example.com"}`,
+			"https://[2001:db8::1]:8443/a",
+		} {
+			assert.Equal(t, s, UriCredentials(s))
+		}
+	})
+	t.Run("Idempotent", func(t *testing.T) {
+		out := UriCredentials("https://user:notreal@example.com/a")
+		assert.Equal(t, out, UriCredentials(out))
+	})
+}
+
+func TestUriRedactedName(t *testing.T) {
+	// A name with no password beside it carries the secret in some conventions, and the two are
+	// indistinguishable from the value alone.
+	t.Run("NameWithoutPassword", func(t *testing.T) {
+		assert.Equal(t, "https://"+UriRedactedValue+"@github.example.com/org/repo.git",
+			UriRedacted("https://ghp000000000000000000@github.example.com/org/repo.git"))
+	})
+	t.Run("NameWithPasswordIsKept", func(t *testing.T) {
+		assert.Equal(t, "https://proxy-user:"+UriRedactedValue+"@proxy.example.com:3128",
+			UriRedacted("https://proxy-user:notreal@proxy.example.com:3128"))
+	})
+	t.Run("NoUserinfo", func(t *testing.T) {
+		assert.Equal(t, "https://proxy.example.com:3128", UriRedacted("https://proxy.example.com:3128"))
+	})
+}

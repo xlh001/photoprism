@@ -42,10 +42,12 @@ func Error(err error) string {
 		return errorOmitted
 	}
 
-	s := err.Error()
+	// Both sides are scrubbed before the replacement, so the copy a producer rendered into the
+	// message and the copy the chain carries reduce to the same text and one pass removes both.
+	s := UriCredentials(err.Error())
 
 	for _, p := range paths {
-		s = strings.ReplaceAll(s, p, errorPathPlaceholder)
+		s = strings.ReplaceAll(s, UriCredentials(p), errorPathPlaceholder)
 	}
 
 	return errorText(s)
@@ -61,13 +63,17 @@ func ErrorFull(err error) string {
 	return errorText(err.Error())
 }
 
-// errorText limits the length of an error message and removes problematic characters, the field
-// separator among them. A message is a sentence rather than a value, so it is folded into one
+// errorText renders an error message for a reader: it removes the credential of any URL, bounds
+// the length, and maps the problematic characters, the field separator among them. That order
+// matters, since the character map would otherwise hide a percent-encoded credential from the scrub. A message is a sentence rather than a value, so it is folded into one
 // field instead of being quoted the way Log bounds the values it renders.
 func errorText(s string) string {
 	if s = strings.TrimSpace(s); s == "" {
 		return "unknown error"
 	}
+
+	// Applied to the whole message, since a URL can appear in one in more than one spelling.
+	s = UriCredentials(s)
 
 	// Limit error message length.
 	if len(s) > LengthLimit {
