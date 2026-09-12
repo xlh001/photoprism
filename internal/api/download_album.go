@@ -101,7 +101,8 @@ func DownloadAlbum(router *gin.RouterGroup) {
 
 		zipWriter := zip.NewWriter(c.Writer)
 		defer func(w *zip.Writer) {
-			logErr("zip", w.Close())
+			// A failure writing the archive to the response is the operator's to read, not a user's.
+			systemErr("zip", w.Close())
 		}(zipWriter)
 
 		var aliases = make(map[string]int)
