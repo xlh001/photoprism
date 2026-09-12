@@ -9,7 +9,8 @@
 #
 #   --deb        install through apt, replacing the distribution libheif packages and anything
 #                that depends on them (default: install under /usr/local alongside them)
-#   --downgrade  allow installing an older version over one already in the prefix
+#   --downgrade  allow installing a version older than the one already in the prefix, or
+#                older than the distribution's own libheif packages
 #
 # --deb is what our own images use, and they select it through PHOTOPRISM_CONTAINER rather
 # than by passing the flag. It exists so an image carries one libheif rather than two: Resolute
@@ -63,7 +64,8 @@ Usage: install-libheif.sh [--deb] [--downgrade] [destdir] [version]
   --deb        install through apt, replacing the distribution libheif packages and
                anything that depends on them (default: install under /usr/local
                alongside them)
-  --downgrade  allow installing an older version over one already in the prefix
+  --downgrade  allow installing a version older than the one already in the prefix,
+               or older than the distribution's own libheif packages
 USAGE
   exit 0
 fi
@@ -123,6 +125,45 @@ verify_artifact() {
   fi
 
   echo "✅ Checksum OK (${actual})."
+}
+
+# newest prints the higher of two versions, which is the one "sort -V" puts last.
+newest() {
+  printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1
+}
+
+# distro_libheif_version prints the highest upstream version among the distribution libheif
+# packages whose files are on disk, and nothing when dpkg is absent or none of them is.
+distro_libheif_version() {
+  local highest="" name version state
+
+  command -v dpkg-query > /dev/null 2>&1 || return 0
+
+  while read -r name version state; do
+    # Every state but these two leaves the shared libraries unpacked, so the loader finds them
+    # whether or not the package is configured. Naming the two that do not is therefore the
+    # reliable direction: an allow-list of "installed" misses a half-configured package that is
+    # every bit as loadable.
+    [[ ${state} != "not-installed" && ${state} != "config-files" ]] || continue
+
+    # Defensive: our package is named so that dpkg's "libheif*" does not select it.
+    [[ ${name} != "photoprism-libheif" ]] || continue
+
+    # A dpkg version carries an epoch, a Debian revision, and sometimes a repacking suffix
+    # around the upstream one. A "+dfsg" repack is the same upstream release, so leaving it on
+    # would read as newer and refuse an install of the very version already packaged.
+    version=${version#*:}
+    version=${version%-*}
+    version=${version%%+*}
+
+    [[ ${version} =~ ^[0-9]+\.[0-9] ]] || continue
+
+    if [[ -z ${highest} ]] || [[ $(newest "${highest}" "${version}") == "${version}" ]]; then
+      highest=${version}
+    fi
+  done < <(dpkg-query -W -f='${Package} ${Version} ${db:Status-Status}\n' 'libheif*' 2> /dev/null || true)
+
+  printf '%s' "${highest}"
 }
 
 # Determine target architecture.
@@ -202,8 +243,7 @@ if [[ -e ${DESTDIR}/lib/libheif.so.1 || -L ${DESTDIR}/lib/libheif.so.1 ]]; then
   if [[ -n ${EXISTING_VERSION} ]] && [[ ${EXISTING_VERSION} == "${EXISTING_SO}" || ! ${EXISTING_VERSION} =~ ^[0-9]+\.[0-9][0-9A-Za-z.+~-]*$ ]]; then
     echo "ℹ️ ${DESTDIR}/lib/libheif.so.1 carries no recognizable version; installing ${LIBHEIF_VERSION#v} over it." 1>&2
   elif [[ -n ${EXISTING_VERSION} ]] && [[ ${EXISTING_VERSION} != "${TARGET_VERSION}" ]]; then
-    # sort -V puts the lower version first, so the existing one is newer when it sorts last.
-    NEWEST=$(printf '%s\n%s\n' "${EXISTING_VERSION}" "${TARGET_VERSION}" | sort -V | tail -1)
+    NEWEST=$(newest "${EXISTING_VERSION}" "${TARGET_VERSION}")
 
     if [[ ${NEWEST} == "${EXISTING_VERSION}" ]] && [[ ${DOWNGRADE} == 0 ]]; then
       echo "❌ ${DESTDIR}/lib already has libheif ${EXISTING_VERSION}, which is newer than ${TARGET_VERSION}." 1>&2
@@ -213,6 +253,34 @@ if [[ -e ${DESTDIR}/lib/libheif.so.1 || -L ${DESTDIR}/lib/libheif.so.1 ]]; then
     fi
 
     echo "ℹ️ Replacing libheif ${EXISTING_VERSION} in \"${DESTDIR}/lib\" with ${TARGET_VERSION}." 1>&2
+  fi
+fi
+
+# The same comparison, one step out: the prefix is searched ahead of the distribution's library
+# directory, so whatever is written here becomes the libheif every consumer loads. Only the
+# prefix path reaches this - the packaging path replaces the distribution package instead.
+# The "/usr" arm repeats the system prefixes rather than leaning on the earlier guard that
+# already refuses it here, so this condition states which prefixes the loader searches.
+if [[ $USE_DEB == 0 ]] && [[ $DESTDIR == "/usr" || $DESTDIR == "/usr/local" ]]; then
+  DISTRO_VERSION=$(distro_libheif_version)
+  TARGET_VERSION=${LIBHEIF_VERSION#v}
+
+  # A comparison that did not happen reads exactly like one that approved, so say which it was.
+  if ! command -v dpkg-query > /dev/null 2>&1; then
+    echo "ℹ️ Without dpkg, the packaged libheif version is unknown and was not compared." 1>&2
+  elif [[ -z ${DISTRO_VERSION} ]]; then
+    echo "ℹ️ No packaged libheif is installed, so ${TARGET_VERSION} shadows nothing." 1>&2
+  elif [[ ${DISTRO_VERSION} != "${TARGET_VERSION}" ]] &&
+    [[ $(newest "${DISTRO_VERSION}" "${TARGET_VERSION}") == "${DISTRO_VERSION}" ]]; then
+    if [[ ${DOWNGRADE} == 0 ]]; then
+      echo "❌ The distribution's libheif is at ${DISTRO_VERSION}, newer than the ${TARGET_VERSION} this installs." 1>&2
+      echo "   \"${DESTDIR}\" is searched ahead of it, so this would become the libheif every consumer loads." 1>&2
+      echo "   In a container image, set PHOTOPRISM_CONTAINER=true or pass --deb to install through apt" 1>&2
+      echo "   instead. On a host, bump the version, or pass --downgrade to install this one anyway." 1>&2
+      exit 1
+    fi
+
+    echo "ℹ️ Shadowing the distribution's libheif ${DISTRO_VERSION} with ${TARGET_VERSION}." 1>&2
   fi
 fi
 

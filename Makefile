@@ -1268,7 +1268,7 @@ docker-dummy-oidc:
 packer-digitalocean:
 	$(info Building DigitalOcean marketplace image...)
 	(cd ./setup/cloud/digitalocean && packer init digitalocean.pkr.hcl && packer build digitalocean.pkr.hcl)
-lint: lint-js lint-go lint-sh check-api-request-limits check-make-help check-scripts-copy-mode
+lint: lint-js lint-go lint-sh check-api-request-limits check-libheif-install check-make-help check-scripts-copy-mode
 lint-js:
 	$(info Linting JS code...)
 	$(MAKE) -C frontend lint
@@ -1281,6 +1281,9 @@ lint-sh:
 check-api-request-limits:
 	$(info Checking API request-body limits...)
 	bash ./scripts/check-api-request-limits.sh
+check-libheif-install:
+	$(info Checking how the libheif installer selects a packaging path...)
+	bash ./scripts/check-libheif-install.sh
 check-make-help:
 	$(info Checking that "make help" only advertises existing targets...)
 	bash ./scripts/check-make-help.sh
