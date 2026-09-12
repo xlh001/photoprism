@@ -48,7 +48,9 @@ func Auth(s string) string {
 	return s
 }
 
-// Handle returns the sanitized username with trimmed whitespace and in lowercase.
+// Handle returns the sanitized username with trimmed whitespace and in lowercase. It folds the
+// characters that render as a space and removes those that render as nothing, so a handle cannot
+// carry a character a reader will not see.
 func Handle(s string) string {
 	s, _, _ = strings.Cut(s, "@")
 
@@ -62,7 +64,12 @@ func Handle(s string) string {
 
 	// Remove unwanted characters.
 	s = strings.Map(func(r rune) rune {
-		if r <= 31 || r == 127 {
+		switch {
+		case unsafeDropRune(r):
+			return -1
+		case unsafeSpaceRune(r):
+			return '.'
+		case unsafeRune(r):
 			return -1
 		}
 		switch r {
@@ -80,13 +87,20 @@ func Handle(s string) string {
 	return strings.ToLower(s)
 }
 
-// Username returns the sanitized distinguished name (Username) with trimmed whitespace and in lowercase.
+// Username returns the sanitized distinguished name (Username) with trimmed whitespace and in
+// lowercase. It folds the characters that render as a space and removes those that render as
+// nothing, so a name cannot carry a character a reader will not see.
 func Username(s string) string {
 	s = strings.TrimSpace(s)
 
 	// Remove unwanted characters.
 	s = strings.Map(func(r rune) rune {
-		if r <= 31 || r == 127 {
+		switch {
+		case unsafeDropRune(r):
+			return -1
+		case unsafeSpaceRune(r):
+			return ' '
+		case unsafeRune(r):
 			return -1
 		}
 		switch r {
@@ -95,6 +109,10 @@ func Username(s string) string {
 		}
 		return r
 	}, s)
+
+	// Trimmed again, because folding a lookalike space next to a removed character puts an
+	// ordinary one at the edge, and a name that is not its own sanitized form fails validation.
+	s = strings.TrimSpace(s)
 
 	// Empty or too long?
 	if s == "" || reject(s, txt.ClipEmail) {

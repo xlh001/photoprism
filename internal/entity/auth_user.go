@@ -749,7 +749,11 @@ func (m *User) SetUsername(login string) (err error) {
 	} else if m.UserName == login {
 		return nil
 	} else if m.UserName != "" && m.ID != 1 {
-		return fmt.Errorf("username cannot be changed")
+		// An account whose stored name the sanitizer no longer accepts may be renamed, since
+		// that is the only way to repair it.
+		if _, nameErr := authn.Username(m.UserName); nameErr == nil {
+			return fmt.Errorf("username cannot be changed")
+		}
 	}
 
 	// Update username and slug.
@@ -1221,12 +1225,20 @@ func (m *User) DeactivatePasscode() (passcode *Passcode, err error) {
 
 // Validate checks if username, email and role are valid and returns an error otherwise.
 func (m *User) Validate() (err error) {
-	// Validate username.
-	if userName, nameErr := authn.Username(m.UserName); nameErr != nil {
-		return fmt.Errorf("username is %s", nameErr.Error())
-	} else {
-		m.UserName = userName
+	// Validate username. A stored name the sanitizer no longer accepts as written is normalized
+	// rather than refused, so an account provisioned earlier stays editable; a new one is refused,
+	// so the caller sees what was rejected.
+	userName, nameErr := authn.Username(m.UserName)
+
+	if nameErr != nil && m.ID > 0 && userName != "" {
+		userName, nameErr = authn.Username(userName)
 	}
+
+	if nameErr != nil {
+		return fmt.Errorf("username is %s", nameErr.Error())
+	}
+
+	m.UserName = userName
 
 	// Check if username also meets the length requirements.
 	if len(m.Username()) < UsernameLength {
