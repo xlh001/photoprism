@@ -405,7 +405,9 @@ func (c *Config) IsReady() bool {
 // mutex.Restart, as a restart is required for every change to take effect.
 func (c *Config) Propagate() {
 	FlushCache()
-	log.SetLevel(c.LogLevel())
+
+	// Applied to both loggers, so a configured level also bounds what the console-only channel writes.
+	SetAppLogLevel(c.LogLevel())
 
 	// Give the decoders a ceiling derived from the configured resolution limit, with headroom,
 	// so that raising the limit raises it and disabling it disables the check.

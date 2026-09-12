@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -328,4 +329,51 @@ func TestConfig_JoinTokenSaveError(t *testing.T) {
 	assert.True(t, namesPath(system, portalDir), "join token path belongs on the system channel, got %v", system)
 	assert.False(t, namesPath(browser, portalDir), "join token path reached the browser channel: %v", browser)
 	assert.False(t, namesPath(system, "***"), "an operator reading the console needs the path, got %v", system)
+}
+
+func TestConfig_PropagateLogLevel(t *testing.T) {
+	// Both loggers follow the configured level, so an operator who asks for warnings does not
+	// receive debug output from the console-only channel the boot stage writes to.
+	restoreSystem, restoreLog := event.SystemLog.GetLevel(), log.GetLevel()
+	restoreTensorFlow := os.Getenv("TF_CPP_MIN_LOG_LEVEL")
+
+	t.Cleanup(func() {
+		event.SystemLog.SetLevel(restoreSystem)
+		log.SetLevel(restoreLog)
+	})
+
+	c := NewConfig(CliTestContext())
+	c.options.Debug = false
+	c.options.Trace = false
+	c.options.LogLevel = logrus.WarnLevel.String()
+
+	event.SystemLog.SetLevel(logrus.TraceLevel)
+	c.Propagate()
+
+	assert.Equal(t, logrus.WarnLevel, event.SystemLog.GetLevel())
+	assert.Equal(t, logrus.WarnLevel, log.GetLevel())
+
+	// The TensorFlow variable is process environment rather than a package value, and Propagate
+	// runs from a request handler, so only the startup paths may write it.
+	assert.Equal(t, restoreTensorFlow, os.Getenv("TF_CPP_MIN_LOG_LEVEL"))
+}
+
+func TestSetAppLogLevel(t *testing.T) {
+	restoreSystem, restoreLog := event.SystemLog.GetLevel(), log.GetLevel()
+	restoreTensorFlow := os.Getenv("TF_CPP_MIN_LOG_LEVEL")
+
+	t.Cleanup(func() {
+		event.SystemLog.SetLevel(restoreSystem)
+		log.SetLevel(restoreLog)
+	})
+
+	t.Run("BothLoggers", func(t *testing.T) {
+		SetAppLogLevel(logrus.ErrorLevel)
+		assert.Equal(t, logrus.ErrorLevel, log.GetLevel())
+		assert.Equal(t, logrus.ErrorLevel, event.SystemLog.GetLevel())
+	})
+	t.Run("TensorFlowUntouched", func(t *testing.T) {
+		SetAppLogLevel(logrus.TraceLevel)
+		assert.Equal(t, restoreTensorFlow, os.Getenv("TF_CPP_MIN_LOG_LEVEL"))
+	})
 }
