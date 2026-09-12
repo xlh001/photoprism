@@ -11,7 +11,7 @@
 - Use `pkg/fs.ConfigFilePath` for config filenames so existing `.yml` files stay valid and new installs can adopt `.yaml` transparently.
 - Use the public accessors on `*config.Config` (e.g. `JWKSUrl()`, `SetJWKSUrl()`) instead of mutating `Config.Options()` directly; reserve raw option tweaks for test fixtures.
 - New metadata sources (e.g. `SrcOllama`, `SrcOpenAI`) must be defined in both `internal/entity/src.go` and the frontend lookup tables (`frontend/src/common/util.js`).
-- Config init order: load `options.yml` (`c.initSettings()`), run `EarlyExt().InitEarly(c)`, connect/register the DB, then `Ext().Init(c)`.
+- Config init order: load `settings.yml` (`c.initSettings()`), run `Ext(StageBoot).Boot(c)`, connect/register the DB, then `Ext(StageInit).Init(c)`. Register a boot-stage extension with `config.Register(config.StageBoot, ...)`.
 - Favor explicit CLI flags: check `c.cliCtx.IsSet("<flag>")` before overriding user-supplied values.
 - Database helpers: reuse `conf.Db()` / `conf.Database*()`, avoid GORM `WithContext`, quote MySQL identifiers, and reject unsupported drivers early.
 
