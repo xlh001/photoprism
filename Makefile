@@ -1268,13 +1268,16 @@ docker-dummy-oidc:
 packer-digitalocean:
 	$(info Building DigitalOcean marketplace image...)
 	(cd ./setup/cloud/digitalocean && packer init digitalocean.pkr.hcl && packer build digitalocean.pkr.hcl)
-lint: lint-js lint-go check-api-request-limits check-make-help check-scripts-copy-mode
+lint: lint-js lint-go lint-sh check-api-request-limits check-make-help check-scripts-copy-mode
 lint-js:
 	$(info Linting JS code...)
 	$(MAKE) -C frontend lint
 lint-go:
 	$(info Linting Go code...)
 	golangci-lint run --issues-exit-code 0 ./pkg/... ./internal/... ./.../internal/...
+lint-sh:
+	$(info Checking the shell scripts that ship in the container images...)
+	shellcheck scripts/dist/*.sh
 check-api-request-limits:
 	$(info Checking API request-body limits...)
 	bash ./scripts/check-api-request-limits.sh
