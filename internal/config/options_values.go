@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/photoprism/photoprism/pkg/clean"
+	"github.com/photoprism/photoprism/pkg/txt"
 )
 
 // optionField describes an option in Options as the values map sees it.
@@ -204,7 +205,7 @@ var RedactedOptionNames = []string{"HttpsProxy"}
 
 // RedactedOptionMarker stands in for a configured value that cannot be rendered safely, so a
 // reader can still tell it apart from one that is not set at all.
-const RedactedOptionMarker = "***"
+const RedactedOptionMarker = txt.Masked
 
 // RedactedOptions returns a copy of the options with those values replaced, so the API response
 // and the CLI report agree about which of them is a secret. The copy shares the reference-typed
@@ -269,8 +270,14 @@ func isRedactedOptionValue(s string) bool {
 
 	pw, set := u.User.Password()
 
-	return set && pw == redactedUrlPassword
+	if !set {
+		// A name with no password beside it is rendered as the marker in full.
+		return u.User.Username() == clean.UriRedactedValue
+	}
+
+	return pw == clean.UriRedactedValue || pw == redactedUrlPassword
 }
 
-// redactedUrlPassword is what url.URL.Redacted substitutes for a password.
+// redactedUrlPassword is what url.URL.Redacted substitutes, which a value redacted by another
+// component may still carry.
 const redactedUrlPassword = "xxxxx"

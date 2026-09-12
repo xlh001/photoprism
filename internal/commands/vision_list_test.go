@@ -23,7 +23,7 @@ func TestVisionEndpoint(t *testing.T) {
 			name:   "BasicAuth",
 			uri:    "https://vision:secret@vision.example.com/api/generate",
 			method: "POST",
-			want:   "POST https://vision:xxxxx@vision.example.com/api/generate",
+			want:   "POST https://vision:***@vision.example.com/api/generate",
 		},
 		{
 			// Nothing distinguishes a name in this position from an access token, which several
@@ -32,7 +32,7 @@ func TestVisionEndpoint(t *testing.T) {
 			name:   "NameWithoutPassword",
 			uri:    "https://vision@vision.example.com/api/generate",
 			method: "POST",
-			want:   "POST https://xxxxx@vision.example.com/api/generate",
+			want:   "POST https://***@vision.example.com/api/generate",
 		},
 		{
 			name:   "QueryIsKept",
@@ -62,37 +62,37 @@ func TestVisionEndpoint(t *testing.T) {
 			name:   "ApiKeyQuery",
 			uri:    "https://api.example.com/v1/responses?api_key=notreal",
 			method: "POST",
-			want:   "POST https://api.example.com/v1/responses?api_key=xxxxx",
+			want:   "POST https://api.example.com/v1/responses?api_key=***",
 		},
 		{
 			name:   "AccessTokenQuery",
 			uri:    "https://api.example.com/v1/responses?access_token=notreal",
 			method: "POST",
-			want:   "POST https://api.example.com/v1/responses?access_token=xxxxx",
+			want:   "POST https://api.example.com/v1/responses?access_token=***",
 		},
 		{
 			name:   "MixedCaseKeyQuery",
 			uri:    "https://api.example.com/v1/responses?X-Api-Key=notreal",
 			method: "POST",
-			want:   "POST https://api.example.com/v1/responses?X-Api-Key=xxxxx",
+			want:   "POST https://api.example.com/v1/responses?X-Api-Key=***",
 		},
 		{
 			name:   "CredentialQueryBesideAKeptOne",
 			uri:    "https://api.example.com/v1/responses?tier=flex&token=notreal",
 			method: "POST",
-			want:   "POST https://api.example.com/v1/responses?tier=flex&token=xxxxx",
+			want:   "POST https://api.example.com/v1/responses?tier=flex&token=***",
 		},
 		{
 			name:   "RepeatedCredentialQuery",
 			uri:    "https://api.example.com/v1/responses?secret=one&secret=two",
 			method: "POST",
-			want:   "POST https://api.example.com/v1/responses?secret=xxxxx&secret=xxxxx",
+			want:   "POST https://api.example.com/v1/responses?secret=***&secret=***",
 		},
 		{ //nolint:gosec // example URL, the credentials in it are exactly what this case redacts
 			name:   "UserinfoAndQueryTogether",
 			uri:    "https://vision:notreal@api.example.com/v1?signature=notreal",
 			method: "POST",
-			want:   "POST https://vision:xxxxx@api.example.com/v1?signature=xxxxx",
+			want:   "POST https://vision:***@api.example.com/v1?signature=***",
 		},
 	}
 

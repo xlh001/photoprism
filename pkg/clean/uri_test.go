@@ -28,7 +28,7 @@ func TestUri(t *testing.T) {
 func TestUriRedacted(t *testing.T) {
 	t.Run("WithCredentials", func(t *testing.T) {
 		result := UriRedacted("https://user:secret@example.com/path?q=1")
-		assert.Equal(t, "https://user:xxxxx@example.com/path?q=1", result)
+		assert.Equal(t, "https://user:***@example.com/path?q=1", result)
 	})
 	t.Run("WithoutCredentials", func(t *testing.T) {
 		result := UriRedacted("https://docs.photoprism.app/getting-started/config-options/#file-converters")
@@ -89,7 +89,7 @@ func TestUriRedactedQuery(t *testing.T) {
 	t.Run("QueryOrderIsNotRelevant", func(t *testing.T) {
 		// Re-encoding sorts the parameters, so the assertion is on what each one holds.
 		result := UriRedacted("https://api.example.com/v1?z=1&api_key=notreal&a=2")
-		assert.Contains(t, result, "api_key=xxxxx")
+		assert.Contains(t, result, "api_key=***")
 		assert.Contains(t, result, "z=1")
 		assert.Contains(t, result, "a=2")
 		assert.NotContains(t, result, "notreal")
@@ -99,8 +99,8 @@ func TestUriRedactedQuery(t *testing.T) {
 		result := UriRedacted("https://user:pass@api.example.com/v1?access_token=notreal")
 		assert.NotContains(t, result, "pass@")
 		assert.NotContains(t, result, "notreal")
-		assert.Contains(t, result, "user:xxxxx@")
-		assert.Contains(t, result, "access_token=xxxxx")
+		assert.Contains(t, result, "user:***@")
+		assert.Contains(t, result, "access_token=***")
 	})
 }
 
@@ -133,6 +133,15 @@ func TestUriCredentials(t *testing.T) {
 		assert.Equal(t, "https://"+UriRedactedValue+"@example.com/a",
 			UriCredentials("https://user:@example.com/a"))
 	})
+	t.Run("NothingToHide", func(t *testing.T) {
+		// A marker here would report a removal that did not happen.
+		assert.Equal(t, "https://@example.com/a", UriCredentials("https://@example.com/a"))
+		assert.Equal(t, "https://:@example.com/a", UriCredentials("https://:@example.com/a"))
+	})
+	t.Run("PasswordWithoutAName", func(t *testing.T) {
+		assert.Equal(t, "https://:"+UriRedactedValue+"@example.com/a",
+			UriCredentials("https://:notreal@example.com/a"))
+	})
 	t.Run("InLongerText", func(t *testing.T) {
 		out := UriCredentials("failed to download https://user:notreal@example.com/a (timeout)")
 		assert.NotContains(t, out, "notreal")
@@ -151,6 +160,12 @@ func TestUriCredentials(t *testing.T) {
 			"https://example.com/a?q=1:2@3",
 			`{"endpoint":"https://api.example.com","user":"bob@example.com"}`,
 			"https://[2001:db8::1]:8443/a",
+			// An AD principal name is an identifier rather than a credential, and every shape a
+			// directory renders it in keeps it out of the userinfo position.
+			"ldap: bind as jdoe@example.com failed",
+			"ldap://dc.example.com/dc=example,dc=com??sub?(userprincipalname=jdoe@example.com)",
+			"ldaps://dc.example.com:636/CN=Users,DC=example,DC=com?(mail=jdoe@example.com)",
+			"ldap: search ldap://dc.example.com/dc=example,dc=com failed for (userprincipalname=jdoe@example.com)",
 		} {
 			assert.Equal(t, s, UriCredentials(s))
 		}
@@ -174,5 +189,11 @@ func TestUriRedactedName(t *testing.T) {
 	})
 	t.Run("NoUserinfo", func(t *testing.T) {
 		assert.Equal(t, "https://proxy.example.com:3128", UriRedacted("https://proxy.example.com:3128"))
+	})
+	t.Run("NothingToHide", func(t *testing.T) {
+		// Redacted marks a password that is set and empty, which would report a removal that did
+		// not happen, so the component is dropped instead.
+		assert.Equal(t, "https://@proxy.example.com", UriRedacted("https://@proxy.example.com"))
+		assert.Equal(t, "https://:@proxy.example.com", UriRedacted("https://:@proxy.example.com"))
 	})
 }

@@ -10,11 +10,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/photoprism/photoprism/pkg/txt"
 )
 
 const (
-	// errorPathPlaceholder replaces the file paths removed by Error.
-	errorPathPlaceholder = "***"
+	// errorPathPlaceholder replaces the locations removed by Error.
+	errorPathPlaceholder = txt.Masked
 	// errorPathSeparators are the characters a value must contain to count as a location.
 	errorPathSeparators = `/\`
 	// errorPathTrivial are the characters a location must consist of more than.

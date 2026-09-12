@@ -322,7 +322,7 @@ func TestRemoveRedactedOptionValues(t *testing.T) {
 	t.Run("StaleRedactedValueIsDropped", func(t *testing.T) {
 		// Read before the proxy changed, posted after. The test is on the value's own shape, not
 		// on what is stored now, so it is dropped rather than written back as the password.
-		v := Values{"HttpsProxy": "https://someone:xxxxx@proxy.example.net:3128"}
+		v := Values{"HttpsProxy": "https://someone:***@proxy.example.net:3128"}
 		assert.Equal(t, []string{"HttpsProxy"}, c.RemoveRedactedOptionValues(v))
 		assert.NotContains(t, v, "HttpsProxy")
 	})
@@ -380,7 +380,7 @@ func TestIsRedactedOptionValue(t *testing.T) {
 		assert.True(t, isRedactedOptionValue(RedactedOptionMarker))
 	})
 	t.Run("RenderedPassword", func(t *testing.T) {
-		assert.True(t, isRedactedOptionValue("https://u:xxxxx@proxy.example.com:3128"))
+		assert.True(t, isRedactedOptionValue("https://u:***@proxy.example.com:3128"))
 	})
 	t.Run("RealValue", func(t *testing.T) {
 		assert.False(t, isRedactedOptionValue("https://proxy-user:proxy-pass@proxy.example.com:3128"))

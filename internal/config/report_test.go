@@ -430,12 +430,12 @@ func TestConfig_ReportURIRedaction(t *testing.T) {
 		rows, _ := conf.Report()
 		values := collect(rows)
 
-		assert.Equal(t, "https://portal:xxxxx@example.com", values["portal-url"])
-		assert.Equal(t, "https://jwks:xxxxx@jwks.example.com/.well-known/jwks.json", values["jwks-url"])
-		assert.Equal(t, "https://cluster:xxxxx@node.example.com/", values["advertise-url"])
-		assert.Equal(t, "https://proxy:xxxxx@proxy.example.com:8443", values["https-proxy"])
-		assert.Equal(t, "https://vision:xxxxx@vision.example.com/api/v1/vision", values["vision-uri"])
-		assert.Equal(t, "https://theme:xxxxx@cdn.photoprism.app/theme.zip", values["theme-url"])
+		assert.Equal(t, "https://portal:***@example.com", values["portal-url"])
+		assert.Equal(t, "https://jwks:***@jwks.example.com/.well-known/jwks.json", values["jwks-url"])
+		assert.Equal(t, "https://cluster:***@node.example.com/", values["advertise-url"])
+		assert.Equal(t, "https://proxy:***@proxy.example.com:8443", values["https-proxy"])
+		assert.Equal(t, "https://vision:***@vision.example.com/api/v1/vision", values["vision-uri"])
+		assert.Equal(t, "https://theme:***@cdn.photoprism.app/theme.zip", values["theme-url"])
 	})
 	t.Run("QueryParameter", func(t *testing.T) {
 		// A service commonly authenticates through a query parameter rather than the userinfo.
@@ -449,7 +449,7 @@ func TestConfig_ReportURIRedaction(t *testing.T) {
 
 		for _, name := range []string{"https-proxy", "vision-uri", "theme-url"} {
 			assert.NotContains(t, values[name], "notreal", "%s must not show the credential", name)
-			assert.Contains(t, values[name], "xxxxx", "%s must report that one was removed", name)
+			assert.Contains(t, values[name], "***", "%s must report that one was removed", name)
 		}
 	})
 }

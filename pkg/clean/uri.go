@@ -4,11 +4,15 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/photoprism/photoprism/pkg/txt"
 )
 
-// UriRedactedValue replaces a credential removed from a URI. It matches what net/url writes for a
-// password, so a redacted query parameter reads like a redacted userinfo.
-const UriRedactedValue = "xxxxx"
+// UriRedactedValue replaces a credential removed from a URI.
+const UriRedactedValue = txt.Masked
+
+// uriRedactedEncoded is the marker as URL encoding renders it, which the query writer applies.
+var uriRedactedEncoded = url.QueryEscape(UriRedactedValue)
 
 // uriUserinfo matches the userinfo of a URL wherever one appears in a longer text. The class
 // excludes the characters RFC 3986 keeps out of a URI, so a compact JSON or key=value list that
@@ -27,8 +31,13 @@ func UriCredentials(s string) string {
 
 	return uriUserinfo.ReplaceAllStringFunc(s, func(match string) string {
 		m := uriUserinfo.FindStringSubmatch(match)
+		user, password, _ := strings.Cut(m[2], ":")
 
-		if user, password, found := strings.Cut(m[2], ":"); found && password != "" {
+		switch {
+		case user == "" && password == "":
+			// Nothing was there, so a marker would report a removal that did not happen.
+			return match
+		case password != "":
 			return m[1] + user + ":" + UriRedactedValue + "@"
 		}
 
@@ -76,14 +85,6 @@ func UriRedacted(s string) string {
 		return ""
 	}
 
-	// A userinfo with no password cannot be told apart from a token, so all of it goes; Redacted
-	// below replaces a password and keeps the name beside it.
-	if uri.User != nil {
-		if password, set := uri.User.Password(); !set || password == "" {
-			uri.User = url.User(UriRedactedValue)
-		}
-	}
-
 	if q := uri.Query(); len(q) > 0 {
 		redacted := false
 
@@ -105,7 +106,9 @@ func UriRedacted(s string) string {
 		}
 	}
 
-	return uri.Redacted()
+	// The marker is percent-encoded by the query writer, so it is restored afterwards, and the
+	// userinfo is replaced on the rendered text for the same reason.
+	return UriCredentials(strings.ReplaceAll(uri.String(), uriRedactedEncoded, UriRedactedValue))
 }
 
 // UriCredentialParam reports whether a query parameter name is one whose value must not be shown.
