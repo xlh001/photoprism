@@ -35,6 +35,10 @@ entryPoints:
   web:
     address: ":80"
     http:
+      # Drop request headers whose name holds a character other than a letter, digit or dash
+      # (default "keep"): CGI/WSGI/PHP/NGINX backends read "X_Auth_Token" and "X-Auth-Token" as
+      # one variable. See https://doc.traefik.io/traefik/security/header-aliases/
+      aliasHeadersStrategy: delete
       # Set every option explicitly: Traefik changed these defaults within the v3.6 patch
       # series, so relying on them means the behaviour can change under you.
       # See https://doc.traefik.io/traefik/reference/install-configuration/entrypoints/#encoded-characters
@@ -64,6 +68,10 @@ entryPoints:
   websecure:
     address: ":443"
     http:
+      # Drop request headers whose name holds a character other than a letter, digit or dash
+      # (default "keep"): CGI/WSGI/PHP/NGINX backends read "X_Auth_Token" and "X-Auth-Token" as
+      # one variable. See https://doc.traefik.io/traefik/security/header-aliases/
+      aliasHeadersStrategy: delete
       # Set every option explicitly: Traefik changed these defaults within the v3.6 patch
       # series, so relying on them means the behaviour can change under you.
       # See https://doc.traefik.io/traefik/reference/install-configuration/entrypoints/#encoded-characters

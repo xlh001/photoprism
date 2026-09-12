@@ -11,12 +11,17 @@ entryPoints:
   web:
     address: ":80"
     http:
+      # Drop request headers whose name holds a character other than a letter, digit or dash, as
+      # CGI/WSGI/PHP/NGINX backends read "X_Auth_Token" and "X-Auth-Token" as one variable:
+      aliasHeadersStrategy: delete
       redirections:
         entryPoint:
           to: websecure
           scheme: https
   websecure:
     address: ":443"
+    http:
+      aliasHeadersStrategy: delete
     transport:
       respondingTimeouts:
         readTimeout: "3h"

@@ -185,6 +185,11 @@ services:
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
+      ## Drop request headers whose name holds a character other than a letter, digit or dash
+      ## (default "keep"): Go splits names on dashes only, so "X_Auth_Token" stays distinct from
+      ## "X-Auth-Token", while CGI/WSGI/PHP/NGINX backends read the two as one.
+      - --entrypoints.web.http.aliasheadersstrategy=delete
+      - --entrypoints.websecure.http.aliasheadersstrategy=delete
     ## Publish Traefik's HTTP and HTTPS entrypoints on the host (bound to every interface
     ## by default; override TRAEFIK_BIND_HOST, TRAEFIK_HTTP_PORT, or TRAEFIK_HTTPS_PORT):
     ports:
