@@ -27,7 +27,9 @@ import (
 	"github.com/photoprism/photoprism/pkg/rnd"
 )
 
-var log = event.Log
+// log writes to the console only, since bootstrap runs before the database connection and the hub
+// has no subscriber that early. An operator reads these lines, so they keep the locations they name.
+var log = event.SystemLog
 
 // OAuthScope is the scope a node requests when exchanging its client credentials.
 const OAuthScope = "cluster"
@@ -90,7 +92,7 @@ func bootstrapClusterNode(c *config.Config) {
 
 	u, err := url.Parse(portalURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		log.Warnf("cluster: invalid portal URL %s", clean.Log(portalURL))
+		log.Warnf("cluster: invalid portal URL %s", clean.Log(redactedPortalUrl(portalURL)))
 		return
 	}
 
@@ -98,7 +100,7 @@ func bootstrapClusterNode(c *config.Config) {
 	var registerResp *cluster.RegisterResponse
 	if cluster.BootstrapAutoJoinEnabled {
 		if registerResp, err = registerWithPortal(c, u, joinToken); err != nil {
-			log.Warnf("config: failed to join the configured cluster (%s)", clean.Error(err))
+			log.Warnf("config: failed to join the configured cluster (%s)", clean.ErrorFull(err))
 		}
 	}
 
@@ -106,10 +108,57 @@ func bootstrapClusterNode(c *config.Config) {
 	if cluster.BootstrapAutoThemeEnabled {
 		if err = syncNodeTheme(c, u, registerResp); err != nil {
 			// Theme install failures are non-critical; log at debug to avoid noise.
-			log.Debugf("cluster: theme download skipped (%s)", clean.Error(err))
+			log.Debugf("cluster: theme download skipped (%s)", clean.ErrorFull(err))
 		}
 		activateNodeThemeIfPresent(c)
 	}
+}
+
+// redactedPortalUrl renders a portal URL without the credentials it carries, keeping the rest
+// readable because a malformed value is what an operator has to fix. UriRedacted covers a query
+// parameter and yields nothing for a value url.Parse rejects, so the userinfo is removed textually.
+func redactedPortalUrl(s string) string {
+	// Only consulted for a value carrying a query, since it renders what url.Parse produced and
+	// a normalized spelling of a value this reports as invalid would mislead.
+	if strings.Contains(s, "?") {
+		if redacted := clean.UriRedacted(s); redacted != "" {
+			s = redacted
+		}
+	}
+
+	return redactedUserinfo(s)
+}
+
+// redactedUserinfo replaces the userinfo of a URL that no parser accepts. Everything before the
+// last "@" of the authority is treated as userinfo, since a value reported here as malformed is
+// one that url.Parse cannot split.
+func redactedUserinfo(s string) string {
+	scheme, rest := "", s
+
+	if i := strings.Index(s, "://"); i >= 0 {
+		scheme, rest = s[:i+3], s[i+3:]
+	} else if strings.HasPrefix(s, "//") {
+		// Protocol-relative, which url.Parse accepts while leaving the scheme empty.
+		scheme, rest = s[:2], s[2:]
+	}
+
+	authority := rest
+
+	if i := strings.IndexAny(rest, "/?#"); i >= 0 {
+		authority = rest[:i]
+	}
+
+	i := strings.LastIndex(authority, "@")
+
+	if i < 0 {
+		return s
+	}
+
+	if user, _, hasPassword := strings.Cut(authority[:i], ":"); hasPassword {
+		return scheme + user + ":" + clean.UriRedactedValue + rest[i:]
+	}
+
+	return scheme + clean.UriRedactedValue + rest[i:]
 }
 
 // resolveNodeOIDCClient derives the instance's OIDC RP credentials from the node
@@ -174,7 +223,9 @@ func registerWithPortal(c *config.Config, portal *url.URL, token string) (*clust
 	delay := cluster.BootstrapRegisterRetryDelay
 	timeout := cluster.BootstrapRegisterTimeout
 
+	// The query of the configured Portal URL is dropped, since none of the endpoints takes one.
 	endpoint := *portal
+	endpoint.RawQuery = ""
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/api/v1/cluster/nodes/register"
 
 	// Let the configuration decide if credentials are missing (MySQL with no effective name/user/password).
@@ -205,7 +256,7 @@ func registerWithPortal(c *config.Config, portal *url.URL, token string) (*clust
 		resp, err := newHTTPClient(timeout).Do(req) //nolint:gosec
 		if err != nil {
 			if attempt < maxAttempts {
-				log.Debugf("cluster: join attempt %d/%d failed with %s", attempt, maxAttempts, clean.Error(err))
+				log.Debugf("cluster: join attempt %d/%d failed with %s", attempt, maxAttempts, clean.ErrorFull(err))
 				time.Sleep(delay)
 				continue
 			}
@@ -215,7 +266,7 @@ func registerWithPortal(c *config.Config, portal *url.URL, token string) (*clust
 		retry, registerResp, err := func() (bool, *cluster.RegisterResponse, error) {
 			defer func() {
 				if closeErr := resp.Body.Close(); closeErr != nil {
-					log.Debugf("cluster: %s (close registration response body)", clean.Error(closeErr))
+					log.Debugf("cluster: %s (close registration response body)", clean.ErrorFull(closeErr))
 				}
 			}()
 
@@ -508,7 +559,7 @@ func primeJWKS(c *config.Config, url string) {
 	defer cancel()
 
 	if err := verifier.Prime(ctx, url); err != nil {
-		log.Debugf("auth: jwks prime skipped (%s)", clean.Error(err))
+		log.Debugf("auth: jwks prime skipped (%s)", clean.ErrorFull(err))
 	}
 }
 
@@ -564,7 +615,7 @@ func syncNodeTheme(c *config.Config, portal *url.URL, registerResp *cluster.Regi
 	if id, secret := strings.TrimSpace(c.NodeClientID()), strings.TrimSpace(c.NodeClientSecret()); id != "" && secret != "" {
 		if t, err := OAuthAccessToken(portal, id, secret, OAuthScope); err != nil {
 			tokenErr = err
-			log.Infof("config: portal access token request failed (%s)", clean.Error(err))
+			log.Infof("config: portal access token request failed (%s)", clean.ErrorFull(err))
 		} else {
 			bearer = t
 		}
@@ -572,7 +623,7 @@ func syncNodeTheme(c *config.Config, portal *url.URL, registerResp *cluster.Regi
 
 	if bearer == "" {
 		if tokenErr != nil {
-			log.Infof("theme: sync skipped because portal access token request failed (%s)", clean.Error(tokenErr))
+			log.Infof("theme: sync skipped because portal access token request failed (%s)", clean.ErrorFull(tokenErr))
 		}
 	}
 
@@ -582,6 +633,7 @@ func syncNodeTheme(c *config.Config, portal *url.URL, registerResp *cluster.Regi
 	}
 
 	endpoint := *portal
+	endpoint.RawQuery = ""
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/api/v1/cluster/theme"
 
 	req, _ := http.NewRequest(http.MethodGet, endpoint.String(), nil)
@@ -597,7 +649,7 @@ func syncNodeTheme(c *config.Config, portal *url.URL, registerResp *cluster.Regi
 
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Debugf("theme: %s (close theme response body)", clean.Error(closeErr))
+			log.Debugf("theme: %s (close theme response body)", clean.ErrorFull(closeErr))
 		}
 	}()
 
@@ -677,6 +729,7 @@ func OAuthAccessToken(portal *url.URL, clientID, clientSecret, scope string) (st
 	}
 
 	tokenURL := *portal
+	tokenURL.RawQuery = ""
 	tokenURL.Path = strings.TrimRight(tokenURL.Path, "/") + "/api/v1/oauth/token"
 
 	form := url.Values{}
@@ -705,7 +758,7 @@ func OAuthAccessToken(portal *url.URL, clientID, clientSecret, scope string) (st
 
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Debugf("cluster: %s (close token response body)", clean.Error(closeErr))
+			log.Debugf("cluster: %s (close token response body)", clean.ErrorFull(closeErr))
 		}
 	}()
 
