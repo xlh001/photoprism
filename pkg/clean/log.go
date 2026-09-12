@@ -8,6 +8,9 @@ import (
 )
 
 const (
+	// FieldSep is the character an event message separates its fields with. A value holding one
+	// is quoted, so a single value cannot read as several fields.
+	FieldSep = '\u203a'
 	// LogNamesLimit is the number of names LogNames renders before it counts the rest.
 	LogNamesLimit = 10
 	// LogNamesBytes is the budget LogNames gives each name it renders.
@@ -36,27 +39,47 @@ func LogNames(names []string) string {
 	return strings.Join(out, ", ")
 }
 
+// logQuoted wraps a value in the quotes that show where it begins and ends, doubling any it
+// already contains so that the value cannot close the pair and continue outside it.
+func logQuoted(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+}
+
 // Log sanitizes strings created from user input in response to the log4j debacle.
 func Log(s string) string {
+	s, quote := logText(s)
+
+	if quote {
+		return logQuoted(s)
+	}
+
+	return s
+}
+
+// logText sanitizes a value and reports whether it has to be quoted for its extent to be clear.
+func logText(s string) (string, bool) {
 	if s == "" {
-		return "''"
+		return "", true
 	}
 
 	s = clip.Shorten(s, LengthLog, clip.Ellipsis)
 
 	if reject(s, LengthLimit) {
-		return "?"
+		return "?", false
 	}
 
-	spaces := false
+	quote := false
 	dropped := false
 
 	// Remove non-printable and other potentially problematic characters.
 	s = strings.Map(func(r rune) rune {
 		switch {
 		case r == ' ' || unsafeSpaceRune(r):
-			spaces = true
+			quote = true
 			return unsafeSpace
+		case r == FieldSep:
+			quote = true
+			return r
 		case unsafeDropRune(r):
 			dropped = true
 			return -1
@@ -76,33 +99,25 @@ func Log(s string) string {
 		}
 	}, s)
 
-	// Callers index the first byte, and a value of only dropped characters empties here.
+	// A value of only dropped characters empties here, and both callers render the pair.
 	if s == "" {
-		return "''"
+		return "", true
 	}
 
 	// Dropping a character joins what it separated, so re-check what the guard refused.
 	if dropped && reject(s, LengthLimit) {
-		return "?"
+		return "?", false
 	}
 
-	// Contains spaces?
-	if spaces {
-		return fmt.Sprintf("'%s'", s)
-	}
-
-	return s
+	return s, quote
 }
 
-// LogQuote sanitizes a string and puts it in single quotes for logging.
+// LogQuote sanitizes a string and puts it in single quotes for logging. It quotes whether or not
+// the value needs it, so that a caller placing several values side by side can tell them apart.
 func LogQuote(s string) string {
-	if s = Log(s); s == "" {
-		return "''"
-	} else if s[0] != '\'' {
-		return fmt.Sprintf("'%s'", s)
-	} else {
-		return s
-	}
+	s, _ = logText(s)
+
+	return logQuoted(s)
 }
 
 // LogLower sanitizes strings created from user input and converts them to lowercase.

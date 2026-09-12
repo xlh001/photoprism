@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/i18n"
 )
 
@@ -125,4 +126,10 @@ func TestPublishCompleted(t *testing.T) {
 
 		assert.Len(t, seen, 3)
 	})
+}
+
+func TestMessageSepIsQuotedByClean(t *testing.T) {
+	// The sanitizer quotes a value holding this character. Format joins fields with it, so the
+	// two have to name the same one or a value could read as several fields unquoted.
+	assert.Contains(t, MessageSep, string(clean.FieldSep))
 }
