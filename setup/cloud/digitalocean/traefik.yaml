@@ -40,7 +40,7 @@ entryPoints:
       # one variable. See https://doc.traefik.io/traefik/security/header-aliases/
       aliasHeadersStrategy: delete
       # Set every option explicitly: Traefik changed these defaults within the v3.6 patch
-      # series, so relying on them means the behaviour can change under you.
+      # series, so relying on them means the behavior can change under you.
       # See https://doc.traefik.io/traefik/reference/install-configuration/entrypoints/#encoded-characters
       #
       # A file name may legitimately contain a percent, hash, question mark, semicolon or
@@ -73,7 +73,7 @@ entryPoints:
       # one variable. See https://doc.traefik.io/traefik/security/header-aliases/
       aliasHeadersStrategy: delete
       # Set every option explicitly: Traefik changed these defaults within the v3.6 patch
-      # series, so relying on them means the behaviour can change under you.
+      # series, so relying on them means the behavior can change under you.
       # See https://doc.traefik.io/traefik/reference/install-configuration/entrypoints/#encoded-characters
       #
       # A file name may legitimately contain a percent, hash, question mark, semicolon or
