@@ -38,13 +38,13 @@ const (
 // callers must not persist a longer value, since a truncated JWT is unusable as a logout hint.
 const IdTokenMaxSize = 4096
 
-// ClampIdToken returns the OIDC ID token limited to IdTokenMaxSize bytes so it fits the id_token
-// column, and reports whether it had to be truncated. VARBINARY lengths are byte counts and a JWT is
-// ASCII, so a byte slice is safe; a truncated token no longer validates as an id_token_hint, so
-// callers should surface the truncated case.
-func ClampIdToken(idToken string) (clamped string, truncated bool) {
+// UsableIdToken returns the OIDC ID token to persist for RP-initiated logout: the token itself
+// when it fits the id_token column, and nothing when it does not, since a provider refuses a
+// truncated JWT as an id_token_hint and an absent hint ends the flow at the login page instead.
+// It reports whether the token was dropped, which callers surface.
+func UsableIdToken(idToken string) (usable string, dropped bool) {
 	if len(idToken) > IdTokenMaxSize {
-		return idToken[:IdTokenMaxSize], true
+		return "", true
 	}
 
 	return idToken, false

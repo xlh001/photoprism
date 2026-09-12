@@ -481,12 +481,11 @@ func OIDCRedirect(router *gin.RouterGroup) {
 			}
 		}
 
-		// Store the ID token for RP-initiated logout (id_token_hint), clamped to the id_token column
-		// size. Exceeding it truncates the JWT into an unusable hint, so warn when that happens; with
-		// the 4096-byte column this only affects extreme role/group-heavy tokens.
-		var idTokenTruncated bool
-		if sess.IdToken, idTokenTruncated = entity.ClampIdToken(tokens.IDToken); idTokenTruncated {
-			event.AuditWarn([]string{clientIp, "create session", "oidc", clean.LogQuote(userName), "id token exceeds storage limit, silent logout may not work"})
+		// Store the ID token for RP-initiated logout (id_token_hint) when it fits the id_token
+		// column. With the 4096-byte column only extreme role/group-heavy tokens exceed it.
+		var idTokenDropped bool
+		if sess.IdToken, idTokenDropped = entity.UsableIdToken(tokens.IDToken); idTokenDropped {
+			event.AuditWarn([]string{clientIp, "create session", "oidc", clean.LogQuote(userName), "id token exceeds storage limit, single logout ends at the login page"})
 		}
 
 		// Set session expiration and timeout.
