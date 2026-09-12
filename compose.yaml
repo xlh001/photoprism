@@ -190,6 +190,11 @@ services:
       ## "X-Auth-Token", while CGI/WSGI/PHP/NGINX backends read the two as one.
       - --entrypoints.web.http.aliasheadersstrategy=delete
       - --entrypoints.websecure.http.aliasheadersstrategy=delete
+      ## Refuse an encoded null byte, as the deployment templates do, since no supported
+      ## filesystem admits one in a file name. The other encoded characters stay at the Traefik
+      ## default of true, because a file name may legitimately contain them.
+      - --entrypoints.web.http.encodedcharacters.allowencodednullcharacter=false
+      - --entrypoints.websecure.http.encodedcharacters.allowencodednullcharacter=false
     ## Publish Traefik's HTTP and HTTPS entrypoints on the host (bound to every interface
     ## by default; override TRAEFIK_BIND_HOST, TRAEFIK_HTTP_PORT, or TRAEFIK_HTTPS_PORT):
     ports:
