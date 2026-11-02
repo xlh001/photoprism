@@ -3,7 +3,7 @@ module caos-test-op
 go 1.26.6
 
 require (
-	github.com/go-chi/chi/v5 v5.3.1
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/google/uuid v1.6.0
 	github.com/zitadel/oidc/v3 v3.47.9
